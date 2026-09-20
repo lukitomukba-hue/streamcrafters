@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Sparkles, Music, Tv, Search, Mic, MicOff, Loader2, BookOpen, Play, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User } from "lucide-react";
 
 type Mood = "moody" | "happy" | "chill";
 
@@ -18,13 +18,38 @@ interface MovieResult {
   bookTitle?: string | null;
 }
 
+interface Message {
+  id: string;
+  sender: "user" | "ai";
+  text: string;
+  movie?: MovieResult | null;
+}
+
 export default function Home() {
   const [mood, setMood] = useState<Mood>("moody");
-  const [query, setQuery] = useState("");
+  const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [result, setResult] = useState<MovieResult | null>(null);
-  const [showTrailer, setShowTrailer] = useState(false);
+  const [selectedTrailerMovie, setSelectedTrailerMovie] = useState<MovieResult | null>(null);
+
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: "1",
+      sender: "ai",
+      text: "გამარჯობა! 👋 მე ვარ StreamCrafters-ის AI კინო-ასისტენტი. შეგიძლია უბრალოდ მესაუბრო, ან მითხრა რა განწყობაზე ხარ და შეგირჩევ საუკეთესო ფილმს!",
+    },
+  ]);
+
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // ჩატის ავტომატური ჩამოწევა ბოლო მესიჯზე
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, loading]);
 
   const themeStyles = {
     moody: "bg-slate-950 text-slate-100 border-slate-800",
@@ -38,7 +63,7 @@ export default function Home() {
     chill: "from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500",
   };
 
-  // 🎙️ ხმოვანი ძებნის (Web Speech API) ლოგიკა
+  // 🎙️ ხმოვანი ძებნა
   const handleVoiceInput = () => {
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -49,7 +74,7 @@ export default function Home() {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = "ka-GE"; // ქართული ენის მხარდაჭერა
+    recognition.lang = "ka-GE";
     recognition.continuous = false;
     recognition.interimResults = false;
 
@@ -60,61 +85,78 @@ export default function Home() {
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
+      setInput(transcript);
     };
 
     recognition.start();
   };
 
-  // 🔍 AI მოთხოვნის გაგზავნა
-  const handleSearch = async () => {
-    if (!query.trim()) return;
+  // 💬 მესიჯის გაგზავნა
+  const handleSend = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      sender: "user",
+      text: input,
+    };
+
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInput("");
     setLoading(true);
-    setResult(null);
-    setShowTrailer(false);
 
     try {
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mood, query }),
+        body: JSON.stringify({ messages: newMessages, mood }),
       });
+
       const data = await res.json();
-      setResult(data);
+
+      const aiMsg: Message = {
+        id: (Date.now() + 1).toString(),
+        sender: "ai",
+        text: data.reply || "პასუხის მიღება ვერ მოხერხდა.",
+        movie: data.hasMovie ? data.movie : null,
+      };
+
+      setMessages((prev) => [...prev, aiMsg]);
     } catch (err) {
       console.error(err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          sender: "ai",
+          text: "კავშირის შეცდომა. გთხოვთ სცადოთ ხელახლა.",
+        },
+      ]);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <main className={`min-h-screen transition-colors duration-500 ${themeStyles[mood]} p-6 md:p-12 relative overflow-x-hidden`}>
-      <div className="max-w-4xl mx-auto space-y-8">
+    <main className={`min-h-screen transition-colors duration-500 ${themeStyles[mood]} flex flex-col p-4 md:p-8 relative`}>
+      <div className="max-w-4xl w-full mx-auto flex-1 flex flex-col space-y-4">
         
         {/* Header */}
-        <header className="flex items-center justify-between border-b border-white/10 pb-6">
+        <header className="flex items-center justify-between border-b border-white/10 pb-4">
           <div className="flex items-center gap-2">
-            <Sparkles className="w-8 h-8 text-indigo-400 animate-pulse" />
-            <h1 className="text-2xl font-bold tracking-tight">StreamCrafters</h1>
+            <Sparkles className="w-7 h-7 text-indigo-400 animate-pulse" />
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">StreamCrafters AI</h1>
           </div>
-          <span className="text-xs uppercase tracking-widest px-3 py-1 rounded-full bg-white/10 border border-white/10">
-            {mood} Mode
-          </span>
-        </header>
-
-        {/* Mood Selector */}
-        <section className="space-y-3">
-          <label className="text-sm font-medium text-slate-400">აირჩიე შენი განწყობა (Mood):</label>
-          <div className="flex gap-3">
+          
+          {/* Mood Selector */}
+          <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10">
             {(["moody", "happy", "chill"] as Mood[]).map((m) => (
               <button
                 key={m}
                 onClick={() => setMood(m)}
-                className={`px-5 py-2.5 rounded-xl font-medium capitalize transition-all border ${
-                  mood === m
-                    ? "bg-white text-black border-white shadow-lg scale-105"
-                    : "bg-white/5 border-white/10 hover:bg-white/10"
+                className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+                  mood === m ? "bg-white text-black shadow-md" : "text-slate-400 hover:text-white"
                 }`}
               >
                 {m === "moody" && "🌙 Moody"}
@@ -123,148 +165,176 @@ export default function Home() {
               </button>
             ))}
           </div>
-        </section>
+        </header>
 
-        {/* Search Input (Voice + Text) */}
-        <section className="relative">
-          <div className="relative flex items-center">
-            <Search className="absolute left-4 w-5 h-5 text-slate-400" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-              placeholder="აღწერე სიუჟეტი ან ილაპარაკე მიკროფონით..."
-              className="w-full pl-12 pr-14 py-4 bg-white/5 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 text-lg placeholder:text-slate-500"
-            />
-            
-            {/* 🎙️ Voice Input Button */}
-            <button
-              onClick={handleVoiceInput}
-              title="ხმოვანი ძებნა"
-              className={`absolute right-3 p-2.5 rounded-xl transition ${
-                isListening
-                  ? "bg-red-500 text-white animate-bounce"
-                  : "bg-white/10 text-slate-300 hover:bg-white/20"
-              }`}
+        {/* 💬 Chat Messages Container */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[65vh] min-h-[50vh]">
+          {messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
             >
-              {isListening ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-          </div>
-          {isListening && (
-            <p className="text-xs text-red-400 mt-2 animate-pulse text-center">
-              🎙️ გისმენთ... თქვით საძიებო ფრაზა...
-            </p>
-          )}
-        </section>
-
-        {/* Generate Button */}
-        <button
-          onClick={handleSearch}
-          disabled={loading || !query.trim()}
-          className={`w-full py-4 rounded-2xl font-bold text-lg bg-gradient-to-r ${accentColors[mood]} shadow-xl transition-all hover:scale-[1.01] flex items-center justify-center gap-2 disabled:opacity-50`}
-        >
-          {loading ? (
-            <>
-              <Loader2 className="w-5 h-5 animate-spin" /> AI აანალიზებს მედიას...
-            </>
-          ) : (
-            "მოძებნე მედია AI-ს მეშვეობით"
-          )}
-        </button>
-
-        {/* Result Card */}
-        {result && (
-          <section className="border border-white/10 bg-white/5 rounded-3xl p-6 md:p-8 space-y-6 backdrop-blur-md animate-in fade-in duration-500 relative">
-            <div className="flex items-start justify-between border-b border-white/10 pb-4">
-              <div>
-                <h2 className="text-3xl font-black">{result.title} ({result.year})</h2>
-                <p className="text-slate-400 text-sm mt-1">
-                  რეჟისორი: {result.director} | IMDb: {result.imdbRating}
-                </p>
-              </div>
-              <span className="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-sm font-semibold">
-                {result.matchScore}% Match
-              </span>
-            </div>
-
-            <p className="text-slate-300 leading-relaxed">
-              <strong className="text-white">რატომ შეგირჩია AI-მ:</strong> {result.aiReasoning}
-            </p>
-
-            {/* 🎬 Trailer Button */}
-            <button
-              onClick={() => setShowTrailer(true)}
-              className="w-full py-3 bg-red-600 hover:bg-red-500 font-bold rounded-xl flex items-center justify-center gap-2 transition shadow-lg"
-            >
-              <Play className="w-5 h-5 fill-white" /> თრეილერის ყურება (YouTube)
-            </button>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-              <div className="p-4 bg-black/30 rounded-2xl border border-white/5 flex items-center gap-3">
-                <Tv className="w-6 h-6 text-indigo-400" />
-                <div>
-                  <p className="text-xs text-slate-400">სტრიმინგის პლატფორმები</p>
-                  <p className="font-semibold text-sm">{result.streamingPlatforms?.join(", ")}</p>
+              {msg.sender === "ai" && (
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="w-5 h-5 text-white" />
                 </div>
-              </div>
+              )}
 
-              <div className="p-4 bg-black/30 rounded-2xl border border-white/5 flex items-center gap-3">
-                <Music className="w-6 h-6 text-emerald-400" />
-                <div>
-                  <p className="text-xs text-slate-400">საუნდტრეკი (OST)</p>
-                  <a
-                    href={result.soundtrackUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-sm hover:underline text-emerald-300"
-                  >
-                    {result.soundtrack}
-                  </a>
+              <div className={`max-w-[85%] md:max-w-[75%] space-y-3`}>
+                {/* Message Bubble */}
+                <div
+                  className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${
+                    msg.sender === "user"
+                      ? "bg-indigo-600 text-white rounded-br-none ml-auto"
+                      : "bg-white/10 backdrop-blur-md border border-white/10 rounded-bl-none"
+                  }`}
+                >
+                  {msg.text}
                 </div>
-              </div>
 
-              {result.bookTitle && (
-                <div className="p-4 bg-black/30 rounded-2xl border border-white/5 flex items-center gap-3 md:col-span-2">
-                  <BookOpen className="w-6 h-6 text-amber-400" />
-                  <div>
-                    <p className="text-xs text-slate-400">დაკავშირებული წიგნი / ლიტერატურა</p>
-                    <p className="font-semibold text-sm">{result.bookTitle}</p>
+                {/* 🎬 Attached Movie Card if present */}
+                {msg.movie && (
+                  <div className="border border-white/15 bg-black/40 rounded-2xl p-5 space-y-4 backdrop-blur-lg shadow-2xl animate-in fade-in duration-300">
+                    <div className="flex items-start justify-between border-b border-white/10 pb-3">
+                      <div>
+                        <h3 className="text-xl font-black text-white">{msg.movie.title} ({msg.movie.year})</h3>
+                        <p className="text-slate-400 text-xs mt-0.5">
+                          რეჟისორი: {msg.movie.director} | IMDb: ⭐ {msg.movie.imdbRating}
+                        </p>
+                      </div>
+                      <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-bold">
+                        {msg.movie.matchScore}% Match
+                      </span>
+                    </div>
+
+                    <p className="text-slate-300 text-xs md:text-sm">
+                      <strong className="text-white">AI განმარტება:</strong> {msg.movie.aiReasoning}
+                    </p>
+
+                    <button
+                      onClick={() => setSelectedTrailerMovie(msg.movie!)}
+                      className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs md:text-sm rounded-xl flex items-center justify-center gap-2 transition shadow-md"
+                    >
+                      <Play className="w-4 h-4 fill-white" /> თრეილერის ყურება
+                    </button>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs pt-1">
+                      <div className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center gap-2">
+                        <Tv className="w-4 h-4 text-indigo-400" />
+                        <span className="truncate">{msg.movie.streamingPlatforms?.join(", ")}</span>
+                      </div>
+                      <div className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center gap-2">
+                        <Music className="w-4 h-4 text-emerald-400" />
+                        <a
+                          href={msg.movie.soundtrackUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="truncate hover:underline text-emerald-300 font-medium"
+                        >
+                          {msg.movie.soundtrack}
+                        </a>
+                      </div>
+                      {msg.movie.bookTitle && (
+                        <div className="p-2.5 bg-white/5 rounded-xl border border-white/5 flex items-center gap-2 md:col-span-2">
+                          <BookOpen className="w-4 h-4 text-amber-400" />
+                          <span className="truncate">{msg.movie.bookTitle}</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
+                )}
+              </div>
+
+              {msg.sender === "user" && (
+                <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center shrink-0 mt-1">
+                  <User className="w-5 h-5 text-slate-300" />
                 </div>
               )}
             </div>
-          </section>
-        )}
+          ))}
 
-        {/* 🍿 YouTube Trailer Modal Pop-up */}
-        {showTrailer && result && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
-              <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <h3 className="font-bold text-lg">{result.title} — Official Trailer</h3>
-                <button
-                  onClick={() => setShowTrailer(false)}
-                  className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+          {loading && (
+            <div className="flex items-center gap-3 text-slate-400 text-sm animate-pulse">
+              <div className="w-8 h-8 rounded-full bg-indigo-600/50 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-white" />
               </div>
-              <div className="relative aspect-video w-full">
-                <iframe
-                  className="w-full h-full"
-                  src={`https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(
-                    result.title + " " + result.year + " official trailer"
-                  )}`}
-                  title="Trailer"
-                  allowFullScreen
-                ></iframe>
-              </div>
+              <Loader2 className="w-4 h-4 animate-spin" /> StreamCrafters ფიქრობს...
+            </div>
+          )}
+
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* 📥 Input Area */}
+        <div className="relative pt-2">
+          {isListening && (
+            <p className="text-xs text-red-400 mb-2 animate-pulse text-center">
+              🎙️ გისმენთ... თქვით თქვენი სათქმელი...
+            </p>
+          )}
+
+          <div className="relative flex items-center">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSend()}
+              placeholder="ესაუბრე AI-ს ან სთხოვე ფილმის მოძებნა..."
+              className="w-full pl-5 pr-24 py-4 bg-white/5 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 text-sm md:text-base placeholder:text-slate-500"
+            />
+
+            <div className="absolute right-3 flex items-center gap-1.5">
+              <button
+                onClick={handleVoiceInput}
+                title="ხმოვანი შეყვანა"
+                className={`p-2.5 rounded-xl transition ${
+                  isListening
+                    ? "bg-red-500 text-white animate-bounce"
+                    : "bg-white/10 text-slate-300 hover:bg-white/20"
+                }`}
+              >
+                {isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </button>
+
+              <button
+                onClick={handleSend}
+                disabled={!input.trim() || loading}
+                className={`p-2.5 rounded-xl bg-gradient-to-r ${accentColors[mood]} text-white transition disabled:opacity-40`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
       </div>
+
+      {/* 🍿 YouTube Trailer Modal */}
+      {selectedTrailerMovie && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
+            <div className="p-4 border-b border-white/10 flex items-center justify-between">
+              <h3 className="font-bold text-base md:text-lg">{selectedTrailerMovie.title} — Official Trailer</h3>
+              <button
+                onClick={() => setSelectedTrailerMovie(null)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="relative aspect-video w-full">
+              <iframe
+                className="w-full h-full"
+                src={`https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(
+                  selectedTrailerMovie.title + " " + selectedTrailerMovie.year + " official trailer"
+                )}`}
+                title="Trailer"
+                allowFullScreen
+              ></iframe>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
