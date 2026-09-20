@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User, AlertCircle } from "lucide-react";
+import { Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User } from "lucide-react";
 
 type Mood = "moody" | "happy" | "chill";
 
@@ -23,7 +23,6 @@ interface Message {
   sender: "user" | "ai";
   text: string;
   movie?: MovieResult | null;
-  isError?: boolean;
 }
 
 export default function Home() {
@@ -37,18 +36,14 @@ export default function Home() {
     {
       id: "1",
       sender: "ai",
-      text: "გამარჯობა! 👋 მე ვარ StreamCrafters-ის AI კინო-ასისტენტი. შეგიძლია უბრალოდ მესაუბრო, დამისვა კითხვები ან მითხრა რა განწყობაზე ხარ და შეგირჩევ საუკეთესო ფილმს!",
+      text: "გამარჯობა! 👋 მე ვარ StreamCrafters AI. მზად ვარ, გესაუბრო კინემატოგრაფიაზე, განვიხილოთ სიუჟეტები, ან შეგირჩიო იდეალური მედია-პაკეტი შენი განწყობის მიხედვით. რაზე ვისაუბროთ?",
     },
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
   const themeStyles = {
@@ -63,13 +58,13 @@ export default function Home() {
     chill: "from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500",
   };
 
-  // 🎙️ ხმოვანი შეყვანის მართვა
+  // 🎙️ ხმოვანი ძებნა
   const handleVoiceInput = () => {
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
-      alert("თქვენს ბრაუზერს ხმოვანი ძებნის მხარდაჭერა არ აქვს. გამოიყენეთ Google Chrome.");
+      alert("ხმოვანი ძებნისთვის გამოიყენეთ Google Chrome.");
       return;
     }
 
@@ -84,26 +79,24 @@ export default function Home() {
 
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(transcript);
+      setInput(event.results[0][0].transcript);
     };
 
     recognition.start();
   };
 
-  // 💬 შეტყობინების გაგზავნის ლოგიკა
+  // 💬 მესიჯის გაგზავნა
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userText = input.trim();
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: "user",
-      text: userText,
+      text: input.trim(),
     };
 
-    const updatedMessages = [...messages, userMsg];
-    setMessages(updatedMessages);
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
 
@@ -111,14 +104,10 @@ export default function Home() {
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: updatedMessages, mood }),
+        body: JSON.stringify({ messages: newMessages, mood }),
       });
 
       const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.reply || "სერვერის შეცდომა");
-      }
 
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
@@ -128,15 +117,14 @@ export default function Home() {
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-    } catch (err: any) {
-      console.error("Fetch Error:", err);
+    } catch (err) {
+      console.error(err);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           sender: "ai",
-          text: `შეცდომა: ${err?.message || "AI-სთან დაკავშირება ვერ მოხერხდა. შეამოწმეთ GEMINI_API_KEY Vercel-ის პარამეტრებში."}`,
-          isError: true,
+          text: "კავშირის შეცდომა. გთხოვთ სცადოთ ხელახლა.",
         },
       ]);
     } finally {
@@ -155,7 +143,6 @@ export default function Home() {
             <h1 className="text-xl md:text-2xl font-bold tracking-tight">StreamCrafters AI</h1>
           </div>
           
-          {/* Mood Selector */}
           <div className="flex items-center gap-2 bg-white/5 p-1 rounded-2xl border border-white/10">
             {(["moody", "happy", "chill"] as Mood[]).map((m) => (
               <button
@@ -173,7 +160,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Chat Messages */}
+        {/* 💬 Chat Container */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[68vh] min-h-[50vh]">
           {messages.map((msg) => (
             <div
@@ -181,18 +168,16 @@ export default function Home() {
               className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.sender === "ai" && (
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.isError ? "bg-red-600" : "bg-indigo-600"}`}>
-                  {msg.isError ? <AlertCircle className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-white" />}
+                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
+                  <Bot className="w-5 h-5 text-white" />
                 </div>
               )}
 
               <div className="max-w-[85%] md:max-w-[75%] space-y-3">
                 <div
-                  className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${
+                  className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed whitespace-pre-wrap ${
                     msg.sender === "user"
                       ? "bg-indigo-600 text-white rounded-br-none ml-auto"
-                      : msg.isError
-                      ? "bg-red-950/80 border border-red-500/50 text-red-200 rounded-bl-none"
                       : "bg-white/10 backdrop-blur-md border border-white/10 rounded-bl-none"
                   }`}
                 >
@@ -215,7 +200,7 @@ export default function Home() {
                     </div>
 
                     <p className="text-slate-300 text-xs md:text-sm">
-                      <strong className="text-white">AI განმარტება:</strong> {msg.movie.aiReasoning}
+                      <strong className="text-white">AI დასაბუთება:</strong> {msg.movie.aiReasoning}
                     </p>
 
                     <button
@@ -265,7 +250,7 @@ export default function Home() {
               <div className="w-8 h-8 rounded-full bg-indigo-600/50 flex items-center justify-center">
                 <Bot className="w-5 h-5 text-white" />
               </div>
-              <Loader2 className="w-4 h-4 animate-spin" /> StreamCrafters აგენერირებს პასუხს...
+              <Loader2 className="w-4 h-4 animate-spin" /> StreamCrafters აზროვნებს...
             </div>
           )}
 
@@ -286,7 +271,7 @@ export default function Home() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="ესაუბრე AI-ს ან სთხოვე ფილმის მოძებნა..."
+              placeholder="ესაუბრე AI-ს, ჰკითხე რჩევა ან სთხოვე ფილმის მოძებნა..."
               className="w-full pl-5 pr-24 py-4 bg-white/5 border border-white/10 rounded-2xl focus:outline-none focus:border-white/30 text-sm md:text-base placeholder:text-slate-500"
             />
 
