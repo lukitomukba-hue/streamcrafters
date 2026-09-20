@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User } from "lucide-react";
+import { Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User, AlertCircle } from "lucide-react";
 
 type Mood = "moody" | "happy" | "chill";
 
@@ -23,6 +23,7 @@ interface Message {
   sender: "user" | "ai";
   text: string;
   movie?: MovieResult | null;
+  isError?: boolean;
 }
 
 export default function Home() {
@@ -36,13 +37,12 @@ export default function Home() {
     {
       id: "1",
       sender: "ai",
-      text: "გამარჯობა! 👋 მე ვარ StreamCrafters-ის AI კინო-ასისტენტი. შეგიძლია უბრალოდ მესაუბრო, ან მითხრა რა განწყობაზე ხარ და შეგირჩევ საუკეთესო ფილმს!",
+      text: "გამარჯობა! 👋 მე ვარ StreamCrafters-ის AI კინო-ასისტენტი. შეგიძლია უბრალოდ მესაუბრო, დამისვა კითხვები ან მითხრა რა განწყობაზე ხარ და შეგირჩევ საუკეთესო ფილმს!",
     },
   ]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // ჩატის ავტომატური ჩამოწევა ბოლო მესიჯზე
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -63,7 +63,7 @@ export default function Home() {
     chill: "from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500",
   };
 
-  // 🎙️ ხმოვანი ძებნა
+  // 🎙️ ხმოვანი შეყვანის მართვა
   const handleVoiceInput = () => {
     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -91,18 +91,19 @@ export default function Home() {
     recognition.start();
   };
 
-  // 💬 მესიჯის გაგზავნა
+  // 💬 შეტყობინების გაგზავნის ლოგიკა
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
+    const userText = input.trim();
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: "user",
-      text: input,
+      text: userText,
     };
 
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const updatedMessages = [...messages, userMsg];
+    setMessages(updatedMessages);
     setInput("");
     setLoading(true);
 
@@ -110,27 +111,32 @@ export default function Home() {
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages, mood }),
+        body: JSON.stringify({ messages: updatedMessages, mood }),
       });
 
       const data = await res.json();
 
+      if (!res.ok) {
+        throw new Error(data.reply || "სერვერის შეცდომა");
+      }
+
       const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: "ai",
-        text: data.reply || "პასუხის მიღება ვერ მოხერხდა.",
+        text: data.reply || "პასუხი ვერ მომზადდა.",
         movie: data.hasMovie ? data.movie : null,
       };
 
       setMessages((prev) => [...prev, aiMsg]);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error("Fetch Error:", err);
       setMessages((prev) => [
         ...prev,
         {
           id: Date.now().toString(),
           sender: "ai",
-          text: "კავშირის შეცდომა. გთხოვთ სცადოთ ხელახლა.",
+          text: `შეცდომა: ${err?.message || "AI-სთან დაკავშირება ვერ მოხერხდა. შეამოწმეთ GEMINI_API_KEY Vercel-ის პარამეტრებში."}`,
+          isError: true,
         },
       ]);
     } finally {
@@ -167,32 +173,33 @@ export default function Home() {
           </div>
         </header>
 
-        {/* 💬 Chat Messages Container */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[65vh] min-h-[50vh]">
+        {/* Chat Messages */}
+        <div className="flex-1 overflow-y-auto space-y-4 pr-2 max-h-[68vh] min-h-[50vh]">
           {messages.map((msg) => (
             <div
               key={msg.id}
               className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.sender === "ai" && (
-                <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0 mt-1">
-                  <Bot className="w-5 h-5 text-white" />
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.isError ? "bg-red-600" : "bg-indigo-600"}`}>
+                  {msg.isError ? <AlertCircle className="w-5 h-5 text-white" /> : <Bot className="w-5 h-5 text-white" />}
                 </div>
               )}
 
-              <div className={`max-w-[85%] md:max-w-[75%] space-y-3`}>
-                {/* Message Bubble */}
+              <div className="max-w-[85%] md:max-w-[75%] space-y-3">
                 <div
                   className={`p-4 rounded-2xl text-sm md:text-base leading-relaxed ${
                     msg.sender === "user"
                       ? "bg-indigo-600 text-white rounded-br-none ml-auto"
+                      : msg.isError
+                      ? "bg-red-950/80 border border-red-500/50 text-red-200 rounded-bl-none"
                       : "bg-white/10 backdrop-blur-md border border-white/10 rounded-bl-none"
                   }`}
                 >
                   {msg.text}
                 </div>
 
-                {/* 🎬 Attached Movie Card if present */}
+                {/* Movie Card */}
                 {msg.movie && (
                   <div className="border border-white/15 bg-black/40 rounded-2xl p-5 space-y-4 backdrop-blur-lg shadow-2xl animate-in fade-in duration-300">
                     <div className="flex items-start justify-between border-b border-white/10 pb-3">
@@ -258,18 +265,18 @@ export default function Home() {
               <div className="w-8 h-8 rounded-full bg-indigo-600/50 flex items-center justify-center">
                 <Bot className="w-5 h-5 text-white" />
               </div>
-              <Loader2 className="w-4 h-4 animate-spin" /> StreamCrafters ფიქრობს...
+              <Loader2 className="w-4 h-4 animate-spin" /> StreamCrafters აგენერირებს პასუხს...
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 📥 Input Area */}
+        {/* Input */}
         <div className="relative pt-2">
           {isListening && (
             <p className="text-xs text-red-400 mb-2 animate-pulse text-center">
-              🎙️ გისმენთ... თქვით თქვენი სათქმელი...
+              🎙️ გისმენთ... ილაპარაკეთ...
             </p>
           )}
 
@@ -309,7 +316,7 @@ export default function Home() {
 
       </div>
 
-      {/* 🍿 YouTube Trailer Modal */}
+      {/* Trailer Modal */}
       {selectedTrailerMovie && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-white/20 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
