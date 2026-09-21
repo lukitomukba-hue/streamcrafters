@@ -12,21 +12,21 @@ function cleanAndParseJson(text: string) {
 }
 
 function getAllApiKeys(): string[] {
-  const rawKeys = [
-    process.env.GEMINI_API_KEY_VIDEO,
-    process.env.GEMINI_API_KEY_AUDIO,
-    process.env.GEMINI_API_KEY_PDF,
+  const keys = [
     process.env.GEMINI_API_KEY,
+    process.env.Gemini_API_Key_2,
+    process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_1,
+    process.env.Gemini_API_Key,
   ];
 
   const dynamicKeys = Object.keys(process.env)
     .filter((k) => k.toLowerCase().includes("gemini"))
     .map((k) => process.env[k]);
 
-  const validKeys = [...rawKeys, ...dynamicKeys]
-    .filter((k): k is string => Boolean(k && typeof k === "string"))
-    .map((k) => k.trim().replace(/[\r\n"']/g, ""))
-    .filter((k) => k.length > 0);
+  const validKeys = [...keys, ...dynamicKeys]
+    .filter((k): k is string => Boolean(k && k.trim().length > 0))
+    .map((k) => k.trim().replace(/^['"]|['"]$/g, ""));
 
   return Array.from(new Set(validKeys));
 }
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "⚠️ API გასაღებები ვერ მოიძებნა! შეამოწმეთ .env.local ან Vercel Environment Variables.",
+        reply: "⚠️ Vercel-ში GEMINI_API_KEY ვერ მოიძებნა! შეამოწმეთ Settings -> Environment Variables.",
         hasMovie: false,
         movie: null,
       });
@@ -70,10 +70,10 @@ export async function POST(req: Request) {
     "director": "რეჟისორი",
     "imdbRating": "8.5",
     "matchScore": 98,
-    "aiReasoning": "მოკლე დასაბუთება",
+    "aiReasoning": "მოკლე დასაბუქთება",
     "streamingPlatforms": ["Cavea Plus", "Netflix", "HBO Max"],
     "soundtrack": "საუნდტრეკი / შემსრულებელი",
-    "soundtrackUrl": "https://open.spotify.com",
+    "soundtrackUrl": "[https://open.spotify.com](https://open.spotify.com)",
     "bookTitle": "თუ ეფუძნება წიგნს (თორემ null)"
   }
 }`;
@@ -84,27 +84,28 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    const models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-pro"];
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest"];
     let errorLogs: string[] = [];
 
     for (const key of apiKeys) {
       for (const model of models) {
         try {
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-          
-          const response = await fetch(url, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-goog-api-key": key.trim(),
-            },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: fullPrompt }] }],
-              generationConfig: {
-                responseMimeType: "application/json",
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
               },
-            }),
-          });
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                },
+              }),
+            }
+          );
 
           if (response.ok) {
             const data = await response.json();
@@ -115,6 +116,7 @@ export async function POST(req: Request) {
               return NextResponse.json(parsedData);
             }
           } else {
+            await response.text();
             errorLogs.push(`[${model}]: ${response.status}`);
           }
         } catch (err: any) {
@@ -124,11 +126,12 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. შეცდომის სტატუსები: ${errorLogs.join(", ")}`,
+      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. სტატუსები: ${errorLogs.join(", ")}`,
       hasMovie: false,
       movie: null,
     });
   } catch (error: any) {
+    console.error("API Route Catch Error:", error);
     return NextResponse.json(
       {
         reply: `⚠️ სერვერის შეცდომა: ${error?.message || "Internal Error"}.`,
