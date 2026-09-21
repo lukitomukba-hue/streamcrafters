@@ -1,120 +1,113 @@
 import { NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
 
+// 🔄 Multi-Key Rotator (დატვირთვის გადანაწილება 3 გასაღებს შორის)
+function getGeminiClient() {
+  const keys = [
+    process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY,
+    process.env.GEMINI_API_KEY_2,
+    process.env.GEMINI_API_KEY_3,
+  ].filter(Boolean);
+
+  if (keys.length === 0) return null;
+  
+  // ირჩევს ერთ-ერთ გასაღებს შემთხვევითობის პრინციპით
+  const selectedKey = keys[Math.floor(Math.random() * keys.length)];
+  return new GoogleGenAI({ apiKey: selectedKey as string });
+}
+
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { messages, mood } = body;
+    const { messages, mood } = await req.json();
+    const ai = getGeminiClient();
 
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    // ბოლო მომხმარებლის შეტყობინება
-    const lastUserMsg = messages && messages.length > 0 
-      ? messages[messages.length - 1].text 
-      : "";
-
-    // 1. თუ API Key არ არის კონფიგურირებული, ვაბრუნებთ სტაბილურ სატესტო პასუხს
-    if (!apiKey) {
-      console.warn("⚠️ GEMINI_API_KEY არ არის მითითებული .env.local ან Vercel-ში. გამოიყენება Fallback რეჟიმი.");
-      
-      const isMovieRequest = lastUserMsg.toLowerCase().includes("ფილმ") || 
-                             lastUserMsg.toLowerCase().includes("რჩე") || 
-                             lastUserMsg.toLowerCase().includes("ყურებ") ||
-                             lastUserMsg.toLowerCase().includes("კინო");
-
+    if (!ai) {
       return NextResponse.json({
-        reply: `გამარჯობა! მე ვარ StreamCrafters-ის AI ასისტენტი. შენი განწყობაა ${mood || "ზოგადი"}. რით შემიძლია დაგეხმარო?`,
-        hasMovie: isMovieRequest,
-        movie: isMovieRequest ? {
-          title: "Interstellar",
-          year: "2014",
-          director: "Christopher Nolan",
-          imdbRating: "8.7",
-          matchScore: 98,
-          aiReasoning: `შენი მოთხოვნის ("${lastUserMsg}") გათვალისწინებით, ეს ფილმი იდეალურად შეესაბამება შენს ${mood} განწყობას.`,
-          streamingPlatforms: ["Cavea Plus", "HBO Max", "Apple TV"],
-          soundtrack: "Hans Zimmer - Official Soundtrack",
-          soundtrackUrl: "https://open.spotify.com",
-          bookTitle: "The Science of Interstellar (Kip Thorne)"
-        } : null
+        reply: "⚠️ API Key არ არის კონფიგურირებული Vercel-ში.",
+        hasMovie: false,
+        movie: null,
       });
     }
 
-    // 2. Google GenAI ინიციალიზაცია
-    const ai = new GoogleGenAI({ apiKey });
+    const lastUserMsg = messages && messages.length > 0 ? messages[messages.length - 1].text : "";
 
-    // 3. სისტემური ინსტრუქციის მომზადება
-    const systemInstruction = `შენ ხარ StreamCrafters-ის AI კინო-ასისტენტი და მეგობარი.
-შენი მიზანია ესაუბრო მომხმარებელს მეგობრული, უშუალო და ენერგიული ტონით (ქართულ ენაზე).
-მიმდინარე მომხმარებლის არჩეული განწყობაა: ${mood || "neutral"}.
+    // 🧠 Agent 1: Intent Classifier & General Conversation
+    const intentPrompt = `შენ ხარ StreamCrafters-ის AI კლასიფიკატორი.
+გააანალიზე მომხმარებლის შეტყობინება: "${lastUserMsg}".
+განსაზღვრე, ითხოვს თუ არა მომხმარებელი ფილმის/სერიალის/კინოს რეკომენდაციას ან აღწერს თუ არა სიუჟეტს.
 
-წესები:
-1. თუ მომხმარებელი გესაუბრება, სვამს ზოგად კითხვებს ან მოგესალმა, უპასუხე ბუნებრივად და "hasMovie" ველში მიუთითე false.
-2. თუ მომხმარებელი ითხოვს ფილმის, სერიალის ან კინოს რეკომენდაციას (ან აღწერს სიუჟეტს/ხასიათს), უპასუხე ტექსტურად ("reply") და "hasMovie" გახადე true, ხოლო "movie" ობიექტში შეავსე დეტალური მონაცემები.
+დააბრუნე მხოლოდ JSON: { "isMovieRequest": true/false }`;
 
-აუცილებელია პასუხი დააბრუნო STRICTLY ვალიდურ JSON ფორმატში, ყოველგვარი დამატებითი ტექსტის გარეშე:
+    const intentResponse = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: intentPrompt,
+      config: { responseMimeType: "application/json" },
+    });
+
+    const intentData = JSON.parse(intentResponse.text || '{"isMovieRequest": false}');
+
+    // თუ უბრალო ჩატია:
+    if (!intentData.isMovieRequest) {
+      const chatPrompt = `შენ ხარ StreamCrafters AI — ინტელექტუალური და მეგობრული კინო-ასისტენტი.
+მომხმარებლის განწყობა: ${mood}.
+გაეცი ლოგიკური, სიღრმისეული და ბუნებრივი პასუხი ქართულად:
+
+საუბრის ისტორია:
+${messages.map((m: any) => `${m.sender}:${m.text}`).join("\n")}
+
+დააბრუნე მხოლოდ JSON:
+{ "reply": "შენი პასუხი ქართულად", "hasMovie": false, "movie": null }`;
+
+      const chatResponse = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: chatPrompt,
+        config: { responseMimeType: "application/json" },
+      });
+
+      return NextResponse.json(JSON.parse(chatResponse.text || "{}"));
+    }
+
+    // 🎬 Agent 2 & 3: Cinema Expert + Media Enrichment
+    const movieExpertPrompt = `შენ ხარ StreamCrafters-ის მთავარი კინო-ექსპერტი და მედია-ინტეგრატორი.
+მომხმარებლის მოთხოვნა: "${lastUserMsg}". განწყობა: ${mood}.
+
+შეარჩიე იდეალური ფილმი და დააკავშირე შესაბამის მედიასთან (საუნდტრეკი, წიგნი).
+
+დააბრუნე STRICTLY JSON:
 {
-  "reply": "შენი ტექსტური პასუხი მომხმარებელს ქართულად",
-  "hasMovie": true/false,
+  "reply": "სიღრმისეული და ლოგიკური განმარტება ქართულად, თუ რატომ შეურჩიე ეს ფილმი",
+  "hasMovie": true,
   "movie": {
-    "title": "ფილმის სახელი",
+    "title": "ფილმის ორიგინალური სახელი",
     "year": "გამოშვების წელი",
     "director": "რეჟისორი",
     "imdbRating": "8.5",
-    "matchScore": 95,
-    "aiReasoning": "მოკლე განმარტება რატომ შეურჩიე ეს ფილმი",
-    "streamingPlatforms": ["Cavea Plus", "Netflix"],
+    "matchScore": 98,
+    "aiReasoning": "მოკლე დასაბუთება",
+    "streamingPlatforms": ["Cavea Plus", "Netflix", "HBO Max"],
     "soundtrack": "საუნდტრეკის დასახელება/ავტორი",
     "soundtrackUrl": "https://open.spotify.com",
     "bookTitle": "თუ ეფუძნება წიგნს (თორემ null)"
   }
 }`;
 
-    // საუბრის ისტორიის სტრუქტურირება
-    const historyText = messages
-      ? messages.map((m: { sender: string; text: string }) => `${m.sender === "user" ? "User" : "AI"}: ${m.text}`).join("\n")
-      : `User: ${lastUserMsg}`;
-
-    const fullPrompt = `${systemInstruction}\n\nსაუბრის ისტორია:\n${historyText}\n\nდააბრუნე მხოლოდ JSON:`;
-
-    // 4. API გამოძახება
-    const response = await ai.models.generateContent({
+    const movieResponse = await ai.models.generateContent({
       model: "gemini-1.5-flash",
-      contents: fullPrompt,
-      config: {
-        responseMimeType: "application/json"
-      }
+      contents: movieExpertPrompt,
+      config: { responseMimeType: "application/json" },
     });
 
-    let rawText = response.text || "";
-
-    // Markdown ტეგების გასუფთავება JSON-ის უსაფრთხო პარსინგისთვის
+    let rawText = movieResponse.text || "";
     rawText = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
 
-    let parsedData;
-    try {
-      parsedData = JSON.parse(rawText);
-    } catch (parseError) {
-      console.error("❌ JSON Parse Error. Raw Output was:", rawText);
-      // უსაფრთხო პასუხი JSON-ის დაზიანების შემთხვევაში
-      parsedData = {
-        reply: rawText.length > 0 && !rawText.startsWith("{") ? rawText : "მოვამზადე პასუხი, თუმცა მონაცემთა ფორმატის ხარვეზია. რით შემიძლია კიდევ დაგეხმარო?",
-        hasMovie: false,
-        movie: null
-      };
-    }
+    return NextResponse.json(JSON.parse(rawText));
 
-    return NextResponse.json(parsedData);
-
-  } catch (error: any) {
-    console.error("❌ AI Route Error:", error?.message || error);
-    return NextResponse.json(
-      {
-        reply: "სერვერთან კავშირის შეცდომაა. გთხოვთ შეამოწმოთ API Key ან სცადოთ მოგვიანებით.",
-        hasMovie: false,
-        movie: null
-      },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("Multi-Agent Pipeline Error:", error);
+    return NextResponse.json({
+      reply: "შეცდომა მოხდა აგენტებს შორის კომუნიკაციისას. გთხოვთ სცადოთ ხელახლა.",
+      hasMovie: false,
+      movie: null,
+    }, { status: 500 });
   }
 }
