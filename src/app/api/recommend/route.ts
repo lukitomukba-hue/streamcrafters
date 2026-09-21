@@ -16,9 +16,9 @@ function cleanAndParseJson(text: string) {
 // 🔄 Multi-Key Rotator (დატვირთვის გადანაწილება)
 function getGeminiClient() {
   const keys = [
-    process.env.GEMINI_API_KEY_1 || process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY_2,
-    process.env.GEMINI_API_KEY_3,
+    process.env.Gemini_API_Key || process.env.Gemini_API_Key,
+    process.env.Gemini_API_Key_2,
+    process.env.Gemini_API_Key_3,
   ].filter(Boolean);
 
   if (keys.length === 0) return null;
