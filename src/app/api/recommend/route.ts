@@ -84,7 +84,7 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
+    const models = ["gemini-2.5-flash", "gemini-flash-latest", "gemini-2.5-pro"];
     let errorLogs: string[] = [];
 
     for (const key of apiKeys) {
