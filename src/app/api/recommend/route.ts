@@ -12,37 +12,38 @@ function cleanAndParseJson(text: string) {
   }
 }
 
-// 🔄 API Key-ს მოძებნა (ყველა შესაძლო სახელის შემოწმება)
-function getApiKey() {
-  const keys = [
-    process.env.Gemini_API_Key,
-    process.env.Gemini_API_Key_2,
-    process.env.Gemini_API_Key_3,
+// 🔑 ვიღებთ ყველა ხელმისაწვდომ API Key-ს Vercel-ის Environment Variables-იდან
+function getAllApiKeys(): string[] {
+  const possibleKeys = [
     process.env.GEMINI_API_KEY,
-    process.env.GEMINI_API_KEY_1,
-    process.env.GEMINI_API_KEY_2,
+    process.env.Gemini_API_Key_2,
     process.env.GEMINI_API_KEY_3,
+    process.env.GEMINI_API_KEY_1,
+    process.env.Gemini_API_Key,
   ];
 
+  // მოვძებნოთ სხვა ნებისმიერი ცვლადიც, შეიცავს თუ არა "gemini"-ს
   const dynamicKeys = Object.keys(process.env)
     .filter((k) => k.toLowerCase().includes("gemini"))
     .map((k) => process.env[k]);
 
-  const validKeys = [...keys, ...dynamicKeys].filter((k): k is string => Boolean(k && k.trim().length > 0));
-  const uniqueKeys = Array.from(new Set(validKeys));
+  const allKeys = [...possibleKeys, ...dynamicKeys]
+    .filter((k): k is string => Boolean(k && k.trim().length > 0))
+    .map((k) => k.trim().replace(/^["']|["']$/g, "")); // 🧼 ბრჭყალების გასუფთავება
 
-  if (uniqueKeys.length === 0) return null;
-  return uniqueKeys[Math.floor(Math.random() * uniqueKeys.length)];
+  // უნიკალური გასაღებების დაბრუნება
+  return Array.from(new Set(allKeys));
 }
 
 export async function POST(req: Request) {
   try {
     const { messages, mood } = await req.json();
-    const apiKey = getApiKey();
 
-    if (!apiKey) {
+    const apiKeys = getAllApiKeys();
+
+    if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "⚠️ Vercel-ის Environment Variables-ში API Key ვერ მოიძებნა! შეამოწმეთ Vercel-ის პარამეტრები და გააკეთეთ Redeploy.",
+        reply: "⚠️ Vercel-ში API Key ვერ მოიძებნა! შეამოწმეთ Settings -> Environment Variables.",
         hasMovie: false,
         movie: null,
       });
@@ -88,44 +89,49 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    // 🚀 პირდაპირი HTTP მოთხოვნა Gemini 1.5 Flash-ის REST API-ზე
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: fullPrompt }] }],
-          generationConfig: {
-            responseMimeType: "application/json",
-          },
-        }),
+    let lastErrorDetails = "";
+
+    // 🔄 ვცდით თითოეულ API Key-ს თანმიმდევრობით
+    for (const apiKey of apiKeys) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: fullPrompt }] }],
+              generationConfig: {
+                responseMimeType: "application/json",
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          const parsedData = cleanAndParseJson(rawText);
+
+          if (parsedData) {
+            return NextResponse.json(parsedData);
+          }
+        } else {
+          const errText = await response.text();
+          lastErrorDetails = `Status ${response.status}: ${errText}`;
+          console.warn(`API Key failed (${apiKey.substring(0, 8)}...):`, errText);
+        }
+      } catch (err: any) {
+        lastErrorDetails = err?.message || String(err);
       }
-    );
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error("Gemini API Error Response:", errText);
-      return NextResponse.json({
-        reply: `⚠️ Google API შეცდომა (${response.status}): შეამოწმეთ API Key-ს ვალიდურობა Google AI Studio-ში.`,
-        hasMovie: false,
-        movie: null,
-      });
     }
 
-    const data = await response.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const parsedData = cleanAndParseJson(rawText);
-
-    if (!parsedData) {
-      return NextResponse.json({
-        reply: rawText || "პასუხი მომზადდა, თუმცა ფორმატირების ხარვეზია.",
-        hasMovie: false,
-        movie: null,
-      });
-    }
-
-    return NextResponse.json(parsedData);
+    // თუ ყველა გასაღებმა შეცდომა დააბრუნა
+    return NextResponse.json({
+      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. დეტალები: ${lastErrorDetails}`,
+      hasMovie: false,
+      movie: null,
+    });
 
   } catch (error: any) {
     console.error("API Route Catch Error:", error);
