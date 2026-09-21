@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-// 🔄 JSON-ის უსაფრთხო პარსერი
+// 🔄 JSON-ის უსაფრთხო პარსერი Markdown ტეგების გასუფთავებით
 function cleanAndParseJson(text: string) {
   if (!text) return null;
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -12,9 +12,9 @@ function cleanAndParseJson(text: string) {
   }
 }
 
-// 🔑 ვიღებთ ყველა ხელმისაწვდომ API Key-ს Vercel-ის Environment Variables-იდან
+// 🔑 იღებს Vercel-ის Environment Variables-იდან ყველა API Key-ს
 function getAllApiKeys(): string[] {
-  const possibleKeys = [
+  const keys = [
     process.env.GEMINI_API_KEY,
     process.env.Gemini_API_Key_2,
     process.env.GEMINI_API_KEY_3,
@@ -22,28 +22,25 @@ function getAllApiKeys(): string[] {
     process.env.Gemini_API_Key,
   ];
 
-  // მოვძებნოთ სხვა ნებისმიერი ცვლადიც, შეიცავს თუ არა "gemini"-ს
   const dynamicKeys = Object.keys(process.env)
     .filter((k) => k.toLowerCase().includes("gemini"))
     .map((k) => process.env[k]);
 
-  const allKeys = [...possibleKeys, ...dynamicKeys]
+  const validKeys = [...keys, ...dynamicKeys]
     .filter((k): k is string => Boolean(k && k.trim().length > 0))
-    .map((k) => k.trim().replace(/^["']|["']$/g, "")); // 🧼 ბრჭყალების გასუფთავება
+    .map((k) => k.trim().replace(/^["']|["']$/g, ""));
 
-  // უნიკალური გასაღებების დაბრუნება
-  return Array.from(new Set(allKeys));
+  return Array.from(new Set(validKeys));
 }
 
 export async function POST(req: Request) {
   try {
     const { messages, mood } = await req.json();
-
     const apiKeys = getAllApiKeys();
 
     if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "⚠️ Vercel-ში API Key ვერ მოიძებნა! შეამოწმეთ Settings -> Environment Variables.",
+        reply: "⚠️ Vercel-ში GEMINI_API_KEY ვერ მოიძებნა! შეამოწმეთ Settings -> Environment Variables.",
         hasMovie: false,
         movie: null,
       });
@@ -89,46 +86,50 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    let lastErrorDetails = "";
+    // 🔄 აქტიური Google Gemini მოდელები
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
+    let errorLogs: string[] = [];
 
-    // 🔄 ვცდით თითოეულ API Key-ს თანმიმდევრობით
-    for (const apiKey of apiKeys) {
-      try {
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: fullPrompt }] }],
-              generationConfig: {
-                responseMimeType: "application/json",
+    for (const key of apiKeys) {
+      for (const model of models) {
+        try {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
               },
-            }),
-          }
-        );
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: fullPrompt }] }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                },
+              }),
+            }
+          );
 
-        if (response.ok) {
-          const data = await response.json();
-          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          const parsedData = cleanAndParseJson(rawText);
+          if (response.ok) {
+            const data = await response.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            const parsedData = cleanAndParseJson(rawText);
 
-          if (parsedData) {
-            return NextResponse.json(parsedData);
+            if (parsedData) {
+              return NextResponse.json(parsedData);
+            }
+          } else {
+            const errText = await response.text();
+            errorLogs.push(`[${model}]: ${response.status}`);
           }
-        } else {
-          const errText = await response.text();
-          lastErrorDetails = `Status ${response.status}: ${errText}`;
-          console.warn(`API Key failed (${apiKey.substring(0, 8)}...):`, errText);
+        } catch (err: any) {
+          errorLogs.push(`[${model}]: ${err?.message || String(err)}`);
         }
-      } catch (err: any) {
-        lastErrorDetails = err?.message || String(err);
       }
     }
 
-    // თუ ყველა გასაღებმა შეცდომა დააბრუნა
     return NextResponse.json({
-      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. დეტალები: ${lastErrorDetails}`,
+      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. შეცდომის სტატუსები: ${errorLogs.join(", ")}`,
       hasMovie: false,
       movie: null,
     });
