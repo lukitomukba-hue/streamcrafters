@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
 function cleanAndParseJson(text: string) {
   if (!text) return null;
@@ -12,21 +12,21 @@ function cleanAndParseJson(text: string) {
 }
 
 function getAllApiKeys(): string[] {
-  const keys = [
+  const rawKeys = [
+    process.env.GEMINI_API_KEY_VIDEO,
+    process.env.GEMINI_API_KEY_AUDIO,
+    process.env.GEMINI_API_KEY_PDF,
     process.env.GEMINI_API_KEY,
-    process.env.Gemini_API_Key_2,
-    process.env.GEMINI_API_KEY_3,
-    process.env.GEMINI_API_KEY_1,
-    process.env.Gemini_API_Key,
   ];
 
   const dynamicKeys = Object.keys(process.env)
     .filter((k) => k.toLowerCase().includes("gemini"))
     .map((k) => process.env[k]);
 
-  const validKeys = [...keys, ...dynamicKeys]
-    .filter((k): k is string => Boolean(k && k.trim().length > 0))
-    .map((k) => k.trim().replace(/^["']|["']$/g, ""));
+  const validKeys = [...rawKeys, ...dynamicKeys]
+    .filter((k): k is string => Boolean(k && typeof k === "string"))
+    .map((k) => k.trim().replace(/[\r\n"']/g, ""))
+    .filter((k) => k.length > 0);
 
   return Array.from(new Set(validKeys));
 }
@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 
     if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "?? Vercel-?? GEMINI_API_KEY ??? ????????! ????????? Settings -> Environment Variables.",
+        reply: "⚠️ API გასაღებები ვერ მოიძებნა! შეამოწმეთ .env.local ან Vercel Environment Variables.",
         hasMovie: false,
         movie: null,
       });
@@ -46,35 +46,35 @@ export async function POST(req: Request) {
 
     const lastUserMsg = messages && messages.length > 0 ? messages[messages.length - 1].text : "";
 
-    const systemPrompt = `??? ??? StreamCrafters-?? AI ????-????????? ?? ?????-???????????.
-???????????? ????????? ????????: ${mood || "neutral"}.
+    const systemPrompt = `შენ ხარ StreamCrafters-ის AI კინო-ასისტენტი და მედია-ინტეგრატორი.
+მომხმარებლის მიმდინარე განწყობა: ${mood || "neutral"}.
 
-????????:
-1. ?????????? ???????????? ???? ???????????: "${lastUserMsg}".
-2. ?? ???????????? ??????? ??????????, ????????? ?? ????? ??????? ???????:
-   - "reply": ????? ???????????, ???????? ?? ????????? ?????? ????????.
+დავალება:
+1. გააანალიზე მომხმარებლის ბოლო შეტყობინება: "${lastUserMsg}".
+2. თუ მომხმარებელი უბრალოდ გესაუბრება, მოგესალმა ან ზოგად კითხვას გისვამს:
+   - "reply": გაეცი სიღრმისეული, ლოგიკური და მეგობრული პასუხი ქართულად.
    - "hasMovie": false
    - "movie": null
-3. ?? ???????????? ?????? ??????/???????? ????????????? ?? ??????? ????? ??????:
-   - "reply": ?????? ?????????? ?????????? ????????, ?? ????? ??????? ?? ?????.
+3. თუ მომხმარებელი ითხოვს ფილმის/სერიალის რეკომენდაციას ან იყენებს სწრაფ იდეებს:
+   - "reply": დაწერე საინტერესო დასაბუთება ქართულად, თუ რატომ შეურჩიე ეს ფილმი.
    - "hasMovie": true
-   - "movie": ?????? ????? ???????????????.
+   - "movie": შეავსე ზუსტი მეტამონაცემებით.
 
-???????? STRICTLY ?????? JSON ????????:
+დააბრუნე STRICTLY მხოლოდ JSON ფორმატში:
 {
-  "reply": "???? ?????? ????????",
+  "reply": "შენი პასუხი ქართულად",
   "hasMovie": true/false,
   "movie": {
-    "title": "?????? ??????????? ??????????",
-    "year": "?????????? ????",
-    "director": "????????",
+    "title": "ფილმის ორიგინალური დასახელება",
+    "year": "გამოშვების წელი",
+    "director": "რეჟისორი",
     "imdbRating": "8.5",
     "matchScore": 98,
-    "aiReasoning": "????? ??????????",
+    "aiReasoning": "მოკლე დასაბუთება",
     "streamingPlatforms": ["Cavea Plus", "Netflix", "HBO Max"],
-    "soundtrack": "?????????? / ????????????",
+    "soundtrack": "საუნდტრეკი / შემსრულებელი",
     "soundtrackUrl": "https://open.spotify.com",
-    "bookTitle": "?? ???????? ????? (????? null)"
+    "bookTitle": "თუ ეფუძნება წიგნს (თორემ null)"
   }
 }`;
 
@@ -82,30 +82,29 @@ export async function POST(req: Request) {
       ? messages.map((m: { sender: string; text: string }) => `${m.sender === "user" ? "User" : "AI"}: ${m.text}`).join("\n")
       : `User: ${lastUserMsg}`;
 
-    const fullPrompt = `${systemPrompt}\n\n??????? ???????:\n${formattedHistory}\n\n???????? ?????? JSON:`;
+    const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    const models = ["gemini-1.5-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
+    const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
     let errorLogs: string[] = [];
 
     for (const key of apiKeys) {
       for (const model of models) {
         try {
-          const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": key,
+          const cleanKey = encodeURIComponent(key.trim());
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${cleanKey}`;
+          
+          const response = await fetch(url, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: fullPrompt }] }],
+              generationConfig: {
+                responseMimeType: "application/json",
               },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: fullPrompt }] }],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                },
-              }),
-            }
-          );
+            }),
+          });
 
           if (response.ok) {
             const data = await response.json();
@@ -116,7 +115,6 @@ export async function POST(req: Request) {
               return NextResponse.json(parsedData);
             }
           } else {
-            const errText = await response.text();
             errorLogs.push(`[${model}]: ${response.status}`);
           }
         } catch (err: any) {
@@ -126,16 +124,14 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({
-      reply: `?? API ???????? ??? ????????. ???????? ?????????: ${errorLogs.join(", ")}`,
+      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. შეცდომის სტატუსები: ${errorLogs.join(", ")}`,
       hasMovie: false,
       movie: null,
     });
-
   } catch (error: any) {
-    console.error("API Route Catch Error:", error);
     return NextResponse.json(
       {
-        reply: `?? ???????? ???????: ${error?.message || "Internal Error"}.`,
+        reply: `⚠️ სერვერის შეცდომა: ${error?.message || "Internal Error"}.`,
         hasMovie: false,
         movie: null,
       },
