@@ -1,22 +1,20 @@
 import { NextResponse } from "next/server";
-import { GoogleGenAI } from "@google/genai";
 
-// 🔄 უსაფრთხო JSON პარსერი Markdown ტეგების გასუფთავებით
+// 🔄 JSON-ის უსაფრთხო პარსერი
 function cleanAndParseJson(text: string) {
   if (!text) return null;
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    console.error("JSON Parse Error:", err, "Raw text:", text);
+    console.error("JSON Parse Error:", err);
     return null;
   }
 }
 
-// 🔄 ავტომატური Key Finder (დიდი და პატარა ასოების მიუხედავად)
+// 🔄 API Key-ს მოძებნა (ყველა შესაძლო სახელის შემოწმება)
 function getApiKey() {
-  // 1. კონკრეტული სახელების შემოწმება (შენი ვარიანტების ჩათვლით)
-  const explicitKeys = [
+  const keys = [
     process.env.Gemini_API_Key,
     process.env.Gemini_API_Key_2,
     process.env.Gemini_API_Key_3,
@@ -26,38 +24,30 @@ function getApiKey() {
     process.env.GEMINI_API_KEY_3,
   ];
 
-  // 2. დინამიური ძებნა process.env-ში (ნებისმიერი ცვლადი, სადაც წერია "gemini" და "key")
   const dynamicKeys = Object.keys(process.env)
-    .filter((k) => k.toLowerCase().includes("gemini") && k.toLowerCase().includes("key"))
+    .filter((k) => k.toLowerCase().includes("gemini"))
     .map((k) => process.env[k]);
 
-  // გაერთიანება და ვალიდაცია
-  const validKeys = [...explicitKeys, ...dynamicKeys].filter((k): k is string => Boolean(k && k.trim().length > 0));
-
-  // დუბლიკატების წაშლა
+  const validKeys = [...keys, ...dynamicKeys].filter((k): k is string => Boolean(k && k.trim().length > 0));
   const uniqueKeys = Array.from(new Set(validKeys));
 
   if (uniqueKeys.length === 0) return null;
-
-  // შემთხვევითობით ირჩევს ერთ-ერთ გასაღებს (Load Balancing)
   return uniqueKeys[Math.floor(Math.random() * uniqueKeys.length)];
 }
 
 export async function POST(req: Request) {
   try {
     const { messages, mood } = await req.json();
-    const selectedKey = getApiKey();
+    const apiKey = getApiKey();
 
-    // თუ API Key მაინც ვერ მოიძებნა
-    if (!selectedKey) {
+    if (!apiKey) {
       return NextResponse.json({
-        reply: "⚠️ Vercel-ში API Key ვერ მოიძებნა! შეამოწმეთ, რომ Vercel-ის Environment Variables-ში ნამდვილად დამატებულია გასაღები და გააკეთეთ Vercel Redeploy.",
+        reply: "⚠️ Vercel-ის Environment Variables-ში API Key ვერ მოიძებნა! შეამოწმეთ Vercel-ის პარამეტრები და გააკეთეთ Redeploy.",
         hasMovie: false,
         movie: null,
       });
     }
 
-    const ai = new GoogleGenAI({ apiKey: selectedKey });
     const lastUserMsg = messages && messages.length > 0 ? messages[messages.length - 1].text : "";
 
     const systemPrompt = `შენ ხარ StreamCrafters-ის AI კინო-ასისტენტი და მედია-ინტეგრატორი.
@@ -98,20 +88,38 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    const response = await ai.models.generateContent({
-      model: "gemini-1.5-flash",
-      contents: fullPrompt,
-      config: {
-        responseMimeType: "application/json",
-      },
-    });
+    // 🚀 პირდაპირი HTTP მოთხოვნა Gemini 1.5 Flash-ის REST API-ზე
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: fullPrompt }] }],
+          generationConfig: {
+            responseMimeType: "application/json",
+          },
+        }),
+      }
+    );
 
-    const rawText = response.text || "";
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error("Gemini API Error Response:", errText);
+      return NextResponse.json({
+        reply: `⚠️ Google API შეცდომა (${response.status}): შეამოწმეთ API Key-ს ვალიდურობა Google AI Studio-ში.`,
+        hasMovie: false,
+        movie: null,
+      });
+    }
+
+    const data = await response.json();
+    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const parsedData = cleanAndParseJson(rawText);
 
     if (!parsedData) {
       return NextResponse.json({
-        reply: rawText || "პასუხი მომზადდა, თუმცა JSON-ის ფორმატირების ხარვეზია.",
+        reply: rawText || "პასუხი მომზადდა, თუმცა ფორმატირების ხარვეზია.",
         hasMovie: false,
         movie: null,
       });
@@ -120,10 +128,10 @@ export async function POST(req: Request) {
     return NextResponse.json(parsedData);
 
   } catch (error: any) {
-    console.error("API Detail Error:", error);
+    console.error("API Route Catch Error:", error);
     return NextResponse.json(
       {
-        reply: `⚠️ AI შეცდომა: ${error?.message || "API კავშირი ჩაიშალა"}.`,
+        reply: `⚠️ სერვერის შეცდომა: ${error?.message || "Internal Error"}.`,
         hasMovie: false,
         movie: null,
       },
