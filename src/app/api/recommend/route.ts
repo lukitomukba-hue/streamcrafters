@@ -1,6 +1,5 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 
-// 🔄 JSON-ის უსაფრთხო პარსერი Markdown ტეგების გასუფთავებით
 function cleanAndParseJson(text: string) {
   if (!text) return null;
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
@@ -12,7 +11,6 @@ function cleanAndParseJson(text: string) {
   }
 }
 
-// 🔑 იღებს Vercel-ის Environment Variables-იდან ყველა API Key-ს
 function getAllApiKeys(): string[] {
   const keys = [
     process.env.GEMINI_API_KEY,
@@ -86,7 +84,6 @@ export async function POST(req: Request) {
 
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
 
-    // 🔄 აქტიური Google Gemini მოდელები
     const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash-latest", "gemini-1.5-pro"];
     let errorLogs: string[] = [];
 
