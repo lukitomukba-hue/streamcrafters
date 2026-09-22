@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect } from "react";
 import {
@@ -128,20 +128,18 @@ export default function Home() {
   return (
     <main className="fixed inset-0 bg-[#08080a] text-amber-100/90 flex flex-col p-3 md:p-5 overflow-hidden select-none font-sans">
       
-      {/* Background Glows */}
       <div className="absolute -top-40 -left-40 w-[35rem] h-[35rem] bg-gradient-to-br from-amber-600/20 via-yellow-600/10 to-emerald-950/20 rounded-full blur-[160px] pointer-events-none animate-pulse" />
       <div className="absolute -bottom-40 -right-40 w-[40rem] h-[40rem] bg-gradient-to-tl from-amber-600/20 via-yellow-600/10 to-emerald-950/20 rounded-full blur-[180px] pointer-events-none" />
 
       <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col h-full min-h-0 overflow-hidden relative z-10">
         
-        {/* Header */}
         <header className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-amber-500/20 pb-3 mb-2 gap-2 backdrop-blur-2xl z-20">
           <div className="flex items-center justify-between w-full md:w-auto">
             <div className="flex items-center gap-3">
               <div className="relative group">
                 <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500 to-emerald-500 rounded-2xl blur opacity-30"></div>
-                <div className="relative w-11 h-11 bg-black rounded-2xl border border-amber-500/40 p-1 flex items-center justify-center shadow-2xl overflow-hidden">
-                  <img src="/4410.jpg" alt="StreamCrafters VIP" className="w-full h-full object-contain rounded-xl" />
+                <div style={{ width: '44px', height: '44px', minWidth: '44px', minHeight: '44px', overflow: 'hidden' }} className="relative bg-black rounded-2xl border border-amber-500/40 p-1 flex items-center justify-center shadow-2xl">
+                  <img src="/4410.jpg" alt="StreamCrafters VIP" style={{ width: '100%', height: '100%', objectFit: 'contain', borderRadius: '12px', display: 'block' }} />
                 </div>
               </div>
               <div>
@@ -176,7 +174,6 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Chat Area */}
         <div className="flex-1 flex gap-4 overflow-hidden min-h-0 relative">
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 pr-2 min-h-0 custom-scrollbar">
@@ -269,7 +266,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Quick Prompts */}
             <div className="shrink-0 pt-1">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-[10px] text-amber-200/50 font-medium flex items-center gap-1">
@@ -286,7 +282,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Input Bar */}
             <div className="shrink-0 relative pt-1">
               {isListening && <p className="text-[10px] text-red-400 mb-1 animate-pulse text-center font-medium">🎙️ გისმენთ...</p>}
               <div className="relative flex items-center">
@@ -303,7 +298,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Watchlist Sidebar */}
           {showWatchlist && (
             <div className="w-full md:w-80 bg-black/95 border border-amber-500/30 rounded-3xl p-4 flex flex-col space-y-3 backdrop-blur-2xl shadow-2xl absolute md:relative inset-0 z-30 animate-in slide-in-from-right duration-300 min-h-0 overflow-hidden">
               <div className="flex items-center justify-between border-b border-amber-500/20 pb-2.5">
@@ -344,7 +338,6 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Trailer Modal */}
       {selectedTrailerMovie && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-neutral-950 border border-amber-500/40 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
