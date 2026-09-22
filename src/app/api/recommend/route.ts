@@ -6,23 +6,21 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { messages, mood } = body;
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY_3;
+    const apiKeys = [
+      process.env.GEMINI_API_KEY,
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+    ].filter(Boolean);
 
-    if (!apiKey) {
+    if (apiKeys.length === 0) {
       return NextResponse.json({
         reply: "API გასაღები ვერ მოიძებნა Vercel/Environment Variables-ში.",
         hasMovie: false
       });
     }
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-3.6-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-      },
-    });
+    const randomKey = apiKeys[Math.floor(Math.random() * apiKeys.length)] as string;
+    const genAI = new GoogleGenerativeAI(randomKey);
 
     const lastUserMessage = messages && messages.length > 0
       ? messages[messages.length - 1].text
@@ -52,16 +50,47 @@ export async function POST(req: Request) {
 }
 `;
 
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    const parsedData = JSON.parse(responseText);
+    // მოდელების სია: თუ რომელიმე გადატვირთულია (503), კოდი ავტომატურად გადავა შემდეგზე
+    const candidateModels = [
+      'gemini-1.5-flash',
+      'gemini-2.0-flash',
+      'gemini-2.5-flash',
+      'gemini-3.6-flash',
+      'gemini-1.5-pro'
+    ];
 
+    let responseText = '';
+    let lastError: any = null;
+
+    for (const modelName of candidateModels) {
+      try {
+        const model = genAI.getGenerativeModel({
+          model: modelName,
+          generationConfig: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const result = await model.generateContent(prompt);
+        responseText = result.response.text();
+        if (responseText) break;
+      } catch (err: any) {
+        console.warn(`Model ${modelName} unavailable, retrying next...`, err?.message);
+        lastError = err;
+      }
+    }
+
+    if (!responseText) {
+      throw lastError || new Error("ყველა მოდელი დროებით მიუწვდომელია.");
+    }
+
+    const parsedData = JSON.parse(responseText);
     return NextResponse.json(parsedData);
 
   } catch (error: any) {
     console.error('Gemini API Error:', error);
     return NextResponse.json({
-      reply: "შეცდომა Gemini API-სთან: " + (error.message || "Internal Error"),
+      reply: "სერვერი დროებით გადატვირთულია. გთხოვთ სცადოთ ხელახლა 2-3 წამში.",
       hasMovie: false
     });
   }
