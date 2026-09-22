@@ -5,120 +5,98 @@ function cleanAndParseJson(text: string) {
   try {
     return JSON.parse(cleaned);
   } catch (err) {
-    console.error("JSON Parse Error:", err);
     return null;
   }
 }
-function getAllApiKeys(): string[] {
-  const keys = [
+function getSanitizedApiKeys(): string[] {
+  const rawKeys = [
     process.env.GEMINI_API_KEY_PDF,
     process.env.GEMINI_API_KEY_AUDIO,
     process.env.GEMINI_API_KEY_VIDEO,
     process.env.GEMINI_API_KEY,
   ];
-  const dynamicKeys = Object.keys(process.env)
-    .filter((k) => k.toUpperCase().includes("GEMINI"))
-    .map((k) => process.env[k]);
-  const validKeys = [...keys, ...dynamicKeys]
+  return rawKeys
     .filter((k): k is string => Boolean(k && k.trim().length > 0))
-    .map((k) => k.trim().replace(/^["']|["']$/g, ""));
-  return Array.from(new Set(validKeys));
+    .map((k) => k.trim().replace(/^["']|["']$/g, "")) // Remove surrounding quotes or spaces
+    .filter((k) => k.startsWith("AIza")); // Valid Gemini keys start with AIza
 }
 export async function POST(req: Request) {
   try {
     const { messages, mood } = await req.json();
-    const apiKeys = getAllApiKeys();
+    const apiKeys = getSanitizedApiKeys();
     if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "⚠️ Vercel-ში API Key ვერ მოიძებნა! შეამოწმეთ GEMINI_API_KEY_PDF / AUDIO / VIDEO ცვლადები.",
+        reply: "⚠️ API Key ვერ მოიძებნა ან ფორმატია არასწორი. შეამოწმეთ Vercel Environment Variables (Key უნდა იწყებოდეს AIza-თი).",
         hasMovie: false,
         movie: null,
       });
     }
     const lastUserMsg = messages && messages.length > 0 ? messages[messages.length - 1].text : "";
-    const systemPrompt = `შენ ხარ StreamCrafters-ის AI კინო-ასისტენტი და მედია-ინტეგრატორი.
-მომხმარებლის მიმდინარე განწყობა: ${mood || "neutral"}.
+    const systemPrompt = `შენ ხარ StreamCrafters-ის AI კინო-ასისტენტი.
+მომხმარებლის განწყობა: ${mood || "neutral"}.
 დავალება:
-1. გააანალიზე მომხმარებლის ბოლო შეტყობინება: "${lastUserMsg}".
-2. თუ მომხმარებელი უბრალოდ გესაუბრება, მოგესალმა ან ზოგად კითხვას გისვამს:
-   - "reply": გაეცი სიღრმისეული, ლოგიკური და მეგობრული პასუხი ქართულად.
-   - "hasMovie": false
-   - "movie": null
-3. თუ მომხმარებელი ითხოვს ფილმის/სერიალის რეკომენდაციას ან იყენებს სწრაფ იდეებს:
-   - "reply": დაწერე საინტერესო დასაბუთება ქართულად, თუ რატომ შეურჩიე ეს ფილმი.
-   - "hasMovie": true
-   - "movie": შეავსე ზუსტი მეტამონაცემებით.
-დააბრუნე STRICTLY მხოლოდ JSON ფორმატში:
+- თუ უბრალოდ გესაუბრება: "reply" - სიღრმისეული პასუხი ქართულად, "hasMovie": false, "movie": null.
+- თუ ითხოვს ფილმს: "reply" - დასაბუთება ქართულად, "hasMovie": true, "movie" - მეტამონაცემები.
+დააბრუნე მხოლოდ ვალიდური JSON:
 {
-  "reply": "შენი პასუხი ქართულად",
+  "reply": "ტექსტი ქართულად",
   "hasMovie": true/false,
   "movie": {
-    "title": "ფილმის ორიგინალური დასახელება",
-    "year": "გამოშვების წელი",
-    "director": "რეჟისორი",
-    "imdbRating": "8.5",
-    "matchScore": 98,
+    "title": "Movie Title",
+    "year": "2024",
+    "director": "Director Name",
+    "imdbRating": "8.0",
+    "matchScore": 95,
     "aiReasoning": "მოკლე დასაბუთება",
-    "streamingPlatforms": ["Cavea Plus", "Netflix", "HBO Max"],
-    "soundtrack": "საუნდტრეკი / შემსრულებელი",
+    "streamingPlatforms": ["Netflix", "Cavea Plus"],
+    "soundtrack": "Track - Artist",
     "soundtrackUrl": "https://open.spotify.com",
-    "bookTitle": "თუ ეფუძნება წიგნს (თორემ null)"
+    "bookTitle": null
   }
 }`;
     const formattedHistory = messages
       ? messages.map((m: { sender: string; text: string }) => `${m.sender === "user" ? "User" : "AI"}: ${m.text}`).join("\n")
       : `User: ${lastUserMsg}`;
-    const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
-    const models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"];
-    let errorLogs: string[] = [];
+    const fullPrompt = `${systemPrompt}\n\n[ისტორია]\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
+    const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
+    let lastErrorDetails = "";
     for (const key of apiKeys) {
       for (const model of models) {
         try {
-          const response = await fetch(
+          const res = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
             {
               method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "x-goog-api-key": key,
-              },
+              headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: fullPrompt }] }],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                },
+                generationConfig: { responseMimeType: "application/json" },
               }),
             }
           );
-          if (response.ok) {
-            const data = await response.json();
+          if (res.ok) {
+            const data = await res.json();
             const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            const parsedData = cleanAndParseJson(rawText);
-            if (parsedData) {
-              return NextResponse.json(parsedData);
-            }
+            const parsed = cleanAndParseJson(rawText);
+            if (parsed) return NextResponse.json(parsed);
           } else {
-            const errText = await response.text();
-            errorLogs.push(`[${model}]: ${response.status}`);
+            const errBody = await res.text();
+            console.error(`Gemini Error (${model}):`, res.status, errBody);
+            lastErrorDetails = `[${model} Status ${res.status}]: ${errBody.slice(0, 100)}`;
           }
         } catch (err: any) {
-          errorLogs.push(`[${model}]: ${err?.message || String(err)}`);
+          console.error("Fetch Exception:", err);
         }
       }
     }
     return NextResponse.json({
-      reply: `⚠️ API მოთხოვნა ვერ შესრულდა. სტატუსები: ${errorLogs.join(", ")}`,
+      reply: `⚠️ API შეცდომა: ${lastErrorDetails || "გთხოვთ შეამოწმოთ API Key-ების ვალიდურობა Google AI Studio-ში."}`,
       hasMovie: false,
       movie: null,
     });
   } catch (error: any) {
-    console.error("API Route Catch Error:", error);
     return NextResponse.json(
-      {
-        reply: `⚠️ სერვერის შეცდომა: ${error?.message || "Internal Error"}.`,
-        hasMovie: false,
-        movie: null,
-      },
+      { reply: `⚠️ სერვერის შეცდომა: ${error?.message}`, hasMovie: false, movie: null },
       { status: 500 }
     );
   }
