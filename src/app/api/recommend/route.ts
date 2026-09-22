@@ -17,8 +17,8 @@ function getSanitizedApiKeys(): string[] {
   ];
   return rawKeys
     .filter((k): k is string => Boolean(k && k.trim().length > 0))
-    .map((k) => k.trim().replace(/^["']|["']$/g, "")) // Remove surrounding quotes or spaces
-    .filter((k) => k.startsWith("AIza")); // Valid Gemini keys start with AIza
+    .map((k) => k.trim().replace(/^["']|["']$/g, ""))
+    .filter((k) => k.startsWith("AIza") || k.startsWith("AQ.")); // Allow both legacy AIza and new AQ. keys
 }
 export async function POST(req: Request) {
   try {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
     const apiKeys = getSanitizedApiKeys();
     if (apiKeys.length === 0) {
       return NextResponse.json({
-        reply: "⚠️ API Key ვერ მოიძებნა ან ფორმატია არასწორი. შეამოწმეთ Vercel Environment Variables (Key უნდა იწყებოდეს AIza-თი).",
+        reply: "⚠️ API Key ვერ მოიძებნა. გთხოვთ შეამოწმოთ Vercel Environment Variables.",
         hasMovie: false,
         movie: null,
       });
@@ -58,16 +58,19 @@ export async function POST(req: Request) {
       ? messages.map((m: { sender: string; text: string }) => `${m.sender === "user" ? "User" : "AI"}: ${m.text}`).join("\n")
       : `User: ${lastUserMsg}`;
     const fullPrompt = `${systemPrompt}\n\n[ისტორია]\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
-    const models = ["gemini-1.5-flash", "gemini-1.5-pro"];
+    const models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"];
     let lastErrorDetails = "";
     for (const key of apiKeys) {
       for (const model of models) {
         try {
           const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`,
             {
               method: "POST",
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                "Content-Type": "application/json",
+                "x-goog-api-key": key,
+              },
               body: JSON.stringify({
                 contents: [{ parts: [{ text: fullPrompt }] }],
                 generationConfig: { responseMimeType: "application/json" },
@@ -82,7 +85,7 @@ export async function POST(req: Request) {
           } else {
             const errBody = await res.text();
             console.error(`Gemini Error (${model}):`, res.status, errBody);
-            lastErrorDetails = `[${model} Status ${res.status}]: ${errBody.slice(0, 100)}`;
+            lastErrorDetails = `[${model} Status ${res.status}]: ${errBody.slice(0, 150)}`;
           }
         } catch (err: any) {
           console.error("Fetch Exception:", err);
@@ -90,7 +93,7 @@ export async function POST(req: Request) {
       }
     }
     return NextResponse.json({
-      reply: `⚠️ API შეცდომა: ${lastErrorDetails || "გთხოვთ შეამოწმოთ API Key-ების ვალიდურობა Google AI Studio-ში."}`,
+      reply: `⚠️ API შეცდომა: ${lastErrorDetails || "გთხოვთ შეამოწმოთ API Key Vercel-ში."}`,
       hasMovie: false,
       movie: null,
     });
