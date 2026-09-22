@@ -6,7 +6,6 @@ export async function POST(req: Request) {
     const body = await req.json();
     const { messages, mood } = body;
 
-    // Vercel-იდან ან .env.local-იდან გასაღების წამოღება
     const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY_3;
 
     if (!apiKey) {
@@ -47,15 +46,19 @@ export async function POST(req: Request) {
 `;
 
     const result = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
         responseMimeType: 'application/json',
       },
     });
 
-    const responseText = result.text || '{}';
-    const parsedData = JSON.parse(responseText);
+    const rawText = result.text ?? '';
+    if (!rawText) {
+      throw new Error('Gemini returned an empty response.');
+    }
+
+    const parsedData = JSON.parse(rawText);
 
     return NextResponse.json(parsedData);
 
