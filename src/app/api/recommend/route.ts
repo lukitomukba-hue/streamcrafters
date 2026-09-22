@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI } from '@google/genai';
+﻿import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NextResponse } from 'next/server';
 
 export async function POST(req: Request) {
@@ -15,7 +15,14 @@ export async function POST(req: Request) {
       });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3.6-flash',
+      generationConfig: {
+        responseMimeType: 'application/json',
+      },
+    });
 
     const lastUserMessage = messages && messages.length > 0
       ? messages[messages.length - 1].text
@@ -45,20 +52,9 @@ export async function POST(req: Request) {
 }
 `;
 
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const rawText = result.text ?? '';
-    if (!rawText) {
-      throw new Error('Gemini returned an empty response.');
-    }
-
-    const parsedData = JSON.parse(rawText);
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    const parsedData = JSON.parse(responseText);
 
     return NextResponse.json(parsedData);
 
