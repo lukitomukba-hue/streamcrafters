@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User,
-  Film, Zap, Brain, Headphones, Bookmark, BookmarkCheck, Share2, Trash2, Cpu, Check, Clapperboard, SlidersHorizontal, Crown
+  Film, Zap, Brain, Headphones, Bookmark, BookmarkCheck, Share2, Trash2, Cpu, Check, Clapperboard, SlidersHorizontal, Crown, LogIn, LogOut
 } from "lucide-react";
 
 type Mood = "moody" | "happy" | "chill";
@@ -17,6 +17,12 @@ interface Message {
   id: string; sender: "user" | "ai"; text: string; movie?: MovieResult | null; timestamp?: string;
 }
 
+interface UserProfile {
+  name: string;
+  email: string;
+  image: string;
+}
+
 export default function Home() {
   const [mood, setMood] = useState<Mood>("moody");
   const [input, setInput] = useState("");
@@ -26,6 +32,10 @@ export default function Home() {
   const [watchlist, setWatchlist] = useState<MovieResult[]>([]);
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [copiedMovieTitle, setCopiedMovieTitle] = useState<string | null>(null);
+
+  // VIP Auth States
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [user, setUser] = useState<UserProfile | null>(null);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -48,6 +58,10 @@ export default function Home() {
     const saved = localStorage.getItem("streamcrafters_watchlist");
     if (saved) {
       try { setWatchlist(JSON.parse(saved)); } catch (e) { console.error(e); }
+    }
+    const savedUser = localStorage.getItem("streamcrafters_user");
+    if (savedUser) {
+      try { setUser(JSON.parse(savedUser)); } catch (e) { console.error(e); }
     }
   }, []);
 
@@ -72,6 +86,24 @@ export default function Home() {
     navigator.clipboard.writeText(text);
     setCopiedMovieTitle(movie.title);
     setTimeout(() => setCopiedMovieTitle(null), 2500);
+  };
+
+  // Google Login Handler
+  const handleGoogleSignIn = () => {
+    // სიმულაციური VIP ავტორიზაცია Google-ის პროფილისთვის
+    const mockGoogleUser: UserProfile = {
+      name: "VIP Member",
+      email: "vip.guest@streamcrafters.ai",
+      image: "https://lh3.googleusercontent.com/a/default-user"
+    };
+    setUser(mockGoogleUser);
+    localStorage.setItem("streamcrafters_user", JSON.stringify(mockGoogleUser));
+    setShowAuthModal(false);
+  };
+
+  const handleLogout = () => {
+    setUser(null);
+    localStorage.removeItem("streamcrafters_user");
   };
 
   const themeStyles = {
@@ -146,6 +178,8 @@ export default function Home() {
       <div className={`absolute -bottom-40 -right-40 w-[40rem] h-[40rem] bg-gradient-to-tl ${orbGlows[mood]} rounded-full blur-[180px] pointer-events-none`} />
 
       <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col h-full min-h-0 overflow-hidden relative z-10">
+        
+        {/* HEADER */}
         <header className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-amber-500/20 pb-3 mb-2 gap-2 backdrop-blur-2xl z-20">
           <div className="flex items-center justify-between w-full md:w-auto">
             <div className="flex items-center gap-3">
@@ -169,6 +203,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
+
             <div className="flex items-center gap-1.5 md:hidden">
               <button onClick={() => setShowWatchlist(!showWatchlist)} className="p-2 bg-black/60 border border-amber-500/30 rounded-xl text-amber-300 relative shadow-lg">
                 <Bookmark className="w-4 h-4" />
@@ -188,6 +223,26 @@ export default function Home() {
               </button>
             </div>
 
+            {/* Auth Button / Profile Widget */}
+            {user ? (
+              <div className="flex items-center gap-2 bg-black/60 border border-amber-500/30 px-2.5 py-1 rounded-2xl shadow-lg">
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-yellow-600 flex items-center justify-center text-black font-black text-xs">
+                  {user.name[0]}
+                </div>
+                <span className="text-xs font-bold text-amber-200 hidden sm:inline">{user.name}</span>
+                <button onClick={handleLogout} title="გამოსვლა" className="p-1 hover:text-red-400 text-amber-200/50 transition">
+                  <LogOut className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowAuthModal(true)}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold text-xs rounded-2xl flex items-center gap-1.5 shadow-lg shadow-amber-500/20 active:scale-95 transition"
+              >
+                <Crown className="w-3.5 h-3.5" /> VIP შესვლა
+              </button>
+            )}
+
             <div className="flex items-center gap-1 bg-black/60 p-1 rounded-2xl border border-amber-500/20 backdrop-blur-xl w-full md:w-auto justify-center shadow-inner">
               {(["moody", "happy", "chill"] as Mood[]).map((m) => (
                 <button key={m} onClick={() => setMood(m)} className={`px-3 py-1 rounded-xl text-xs font-extrabold capitalize transition-all duration-300 flex-1 md:flex-none ${mood === m ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-lg shadow-amber-500/20 scale-105" : "text-amber-200/50 hover:text-amber-300"}`}>
@@ -200,6 +255,7 @@ export default function Home() {
           </div>
         </header>
 
+        {/* CHAT CONTAINER */}
         <div className="flex-1 flex gap-4 overflow-hidden min-h-0 relative">
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div ref={chatContainerRef} className="flex-1 overflow-y-auto space-y-4 pr-2 min-h-0 custom-scrollbar">
@@ -365,6 +421,58 @@ export default function Home() {
         </div>
       </div>
 
+      {/* 👑 VIP GOOGLE AUTH MODAL */}
+      {showAuthModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
+          <div className="bg-gradient-to-b from-neutral-950 via-black to-emerald-950/40 border border-amber-500/40 rounded-3xl w-full max-w-md p-6 shadow-2xl relative text-center space-y-5">
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition border border-amber-500/20"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
+            {/* Logo Glow Frame */}
+            <div className="w-20 h-20 mx-auto relative group">
+              <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-emerald-500 rounded-3xl blur opacity-50 group-hover:opacity-100 transition duration-500"></div>
+              <div className="relative w-full h-full bg-black rounded-3xl border border-amber-500/50 p-2 flex items-center justify-center shadow-2xl overflow-hidden">
+                <img src="/4410.jpg" alt="StreamCrafters VIP" className="w-full h-full object-contain rounded-2xl" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black bg-gradient-to-r from-amber-200 via-amber-400 to-yellow-500 bg-clip-text text-transparent">
+                StreamCrafters VIP Lounge
+              </h3>
+              <p className="text-xs text-amber-200/60 leading-relaxed">
+                გაიარეთ ავტორიზაცია Google-ით ექსკლუზიურ AI ფუნქციებზე, Watchlist-ის სინქრონიზაციასა და პერსონალურ რეკომენდაციებზე წვდომისთვის.
+              </p>
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={handleGoogleSignIn}
+                className="w-full py-3 px-4 bg-black/80 hover:bg-black/90 text-amber-100 font-bold text-xs rounded-2xl border border-amber-500/40 flex items-center justify-center gap-3 transition-all duration-300 hover:border-amber-400 hover:shadow-lg hover:shadow-amber-500/20 active:scale-95 group"
+              >
+                {/* Google Icon */}
+                <svg className="w-5 h-5 group-hover:scale-110 transition" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+                Google-ით ავტორიზაცია
+              </button>
+            </div>
+
+            <div className="text-[10px] text-amber-200/40 pt-2 border-t border-amber-500/10">
+              ავტორიზაციით თქვენ ეთანხმებით StreamCrafters VIP წესებსა და პირობებს.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TRAILER MODAL */}
       {selectedTrailerMovie && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-2xl z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
           <div className="bg-neutral-950 border border-amber-500/40 rounded-3xl w-full max-w-3xl overflow-hidden shadow-2xl relative">
