@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import Link from "next/link";
@@ -20,7 +20,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <div className="relative group cursor-pointer">
             <div className="absolute -inset-1 bg-gradient-to-r from-amber-500 to-emerald-500 rounded-2xl blur opacity-40 group-hover:opacity-80 transition duration-500" />
-            <div className="relative w-12 h-12 bg-black rounded-2xl border border-amber-500/50 p-1 flex items-center justify-center shadow-2xl overflow-hidden">
+            <div className="relative w-12 h-12 bg-black rounded-2xl border border-amber-500/50 p-1 flex items-center justify-center shadow-2xl">
               <img src="/4410.jpg" alt="StreamCrafters VIP" className="w-full h-full object-contain rounded-xl" />
             </div>
           </div>
@@ -59,7 +59,7 @@ export default function Home() {
       {/* 🚀 Hero Section */}
       <section className="max-w-4xl mx-auto px-4 pt-16 pb-20 text-center relative z-10">
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-amber-950/80 to-emerald-950/80 border border-amber-500/30 text-amber-300 text-xs font-bold mb-6 shadow-xl backdrop-blur-xl">
-          <Crown className="w-3.5 h-3.5 text-amber-400" />
+          <Crown className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
           <span>3-Agent VIP AI Architecture • Powered by Gemini</span>
         </div>
 
@@ -94,7 +94,7 @@ export default function Home() {
         {/* Feature Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 text-left pt-6 border-t border-amber-500/20">
           <div className="p-5 bg-black/60 border border-amber-500/20 rounded-3xl backdrop-blur-xl hover:border-amber-500/40 transition group">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 transition">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 group-hover:scale-110 transition">
               <Film className="w-5 h-5" />
             </div>
             <h3 className="font-extrabold text-amber-200 text-sm mb-1">3-Agent AI Match</h3>
@@ -102,7 +102,7 @@ export default function Home() {
           </div>
 
           <div className="p-5 bg-black/60 border border-amber-500/20 rounded-3xl backdrop-blur-xl hover:border-amber-500/40 transition group">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 text-emerald-400 transition">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mb-4 text-emerald-400 group-hover:scale-110 transition">
               <Music className="w-5 h-5" />
             </div>
             <h3 className="font-extrabold text-amber-200 text-sm mb-1">Soundtracks & Books</h3>
@@ -110,7 +110,7 @@ export default function Home() {
           </div>
 
           <div className="p-5 bg-black/60 border border-amber-500/20 rounded-3xl backdrop-blur-xl hover:border-amber-500/40 transition group">
-            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 transition">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mb-4 text-amber-400 group-hover:scale-110 transition">
               <Star className="w-5 h-5" />
             </div>
             <h3 className="font-extrabold text-amber-200 text-sm mb-1">Trailers & Watchlist</h3>
@@ -124,7 +124,7 @@ export default function Home() {
         <p>© 2026 StreamCrafters VIP. All rights reserved.</p>
       </footer>
 
-      <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+      {isAuthOpen && <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />}
     </div>
   );
 }
