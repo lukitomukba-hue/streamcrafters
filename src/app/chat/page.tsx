@@ -8,8 +8,6 @@ import {
 import Link from "next/link";
 import AuthModal from "../components/AuthModal";
 
-type Mood = "moody" | "happy" | "chill";
-
 interface MovieResult {
   title: string; year: string; director: string; imdbRating: string; matchScore: number;
   aiReasoning: string; streamingPlatforms: string[]; soundtrack: string; soundtrackUrl?: string; bookTitle?: string | null;
@@ -20,7 +18,6 @@ interface Message {
 }
 
 export default function ChatPage() {
-  const [mood, setMood] = useState<Mood>("moody");
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -77,18 +74,6 @@ export default function ChatPage() {
     setTimeout(() => setCopiedMovieTitle(null), 2500);
   };
 
-  const themeStyles = {
-    moody: "bg-[#08080a] text-amber-100/90 border-amber-900/30",
-    happy: "bg-[#0b0c09] text-amber-50 border-emerald-900/40",
-    chill: "bg-[#050a08] text-emerald-50 border-emerald-900/40",
-  };
-
-  const orbGlows = {
-    moody: "from-amber-600/20 via-yellow-600/10 to-emerald-950/20",
-    happy: "from-amber-500/20 via-orange-600/15 to-emerald-900/20",
-    chill: "from-emerald-600/20 via-teal-700/15 to-amber-900/20",
-  };
-
   const promptChips = [
     { icon: <Film className="w-3.5 h-3.5 text-amber-400" />, text: "90-იანების საკულტო Sci-Fi ფილმები" },
     { icon: <Brain className="w-3.5 h-3.5 text-emerald-400" />, text: "მოულოდნელი სიუჟეტური ფინალით" },
@@ -124,7 +109,7 @@ export default function ChatPage() {
       const res = await fetch("/api/recommend", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages, mood }),
+        body: JSON.stringify({ messages: newMessages, mood: "moody" }),
       });
       const data = await res.json();
       const aiMsg: Message = {
@@ -144,9 +129,9 @@ export default function ChatPage() {
   };
 
   return (
-    <main className={`fixed inset-0 transition-colors duration-700 ${themeStyles[mood]} flex flex-col p-3 md:p-5 overflow-hidden select-none font-sans`}>
-      <div className={`absolute -top-40 -left-40 w-[35rem] h-[35rem] bg-gradient-to-br ${orbGlows[mood]} rounded-full blur-[160px] pointer-events-none animate-pulse`} />
-      <div className={`absolute -bottom-40 -right-40 w-[40rem] h-[40rem] bg-gradient-to-tl ${orbGlows[mood]} rounded-full blur-[180px] pointer-events-none`} />
+    <main className="fixed inset-0 bg-[#08080a] text-amber-100/90 border-amber-900/30 flex flex-col p-3 md:p-5 overflow-hidden select-none font-sans">
+      <div className="absolute -top-40 -left-40 w-[35rem] h-[35rem] bg-gradient-to-br from-amber-600/20 via-yellow-600/10 to-emerald-950/20 rounded-full blur-[160px] pointer-events-none animate-pulse" />
+      <div className="absolute -bottom-40 -right-40 w-[40rem] h-[40rem] bg-gradient-to-tl from-amber-600/20 via-yellow-600/10 to-emerald-950/20 rounded-full blur-[180px] pointer-events-none" />
 
       <div className="max-w-5xl w-full mx-auto flex-1 flex flex-col h-full min-h-0 overflow-hidden relative z-10">
         <header className="shrink-0 flex flex-col md:flex-row md:items-center justify-between border-b border-amber-500/20 pb-3 mb-2 gap-2 backdrop-blur-2xl z-20">
@@ -186,29 +171,17 @@ export default function ChatPage() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between md:justify-end gap-2 w-full md:w-auto">
-            <div className="hidden md:flex items-center gap-2">
-              <button onClick={() => setIsAuthOpen(true)} className="px-3 py-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition">
-                <UserCheck className="w-3.5 h-3.5" /> VIP შესვლა
-              </button>
-              <button onClick={() => setMessages([{ id: Date.now().toString(), sender: "ai", text: "ჩატი გასუფთავებულია!", timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }])} className="p-2 bg-black/40 hover:bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/60 hover:text-amber-300 transition-all text-xs">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => setShowWatchlist(!showWatchlist)} className="px-3 py-1.5 bg-gradient-to-r from-amber-950/40 to-emerald-950/40 hover:from-amber-900/60 hover:to-emerald-900/60 border border-amber-500/30 rounded-xl text-amber-200 transition-all text-xs font-semibold flex items-center gap-2 relative shadow-lg">
-                <Bookmark className="w-3.5 h-3.5 text-amber-400" /> Watchlist
-                {watchlist.length > 0 && <span className="px-1.5 py-0.2 bg-gradient-to-r from-amber-400 to-yellow-500 text-black text-[10px] font-black rounded-full shadow">{watchlist.length}</span>}
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1 bg-black/60 p-1 rounded-2xl border border-amber-500/20 backdrop-blur-xl w-full md:w-auto justify-center shadow-inner">
-              {(["moody", "happy", "chill"] as Mood[]).map((m) => (
-                <button key={m} onClick={() => setMood(m)} className={`px-3 py-1 rounded-xl text-xs font-extrabold capitalize transition-all duration-300 flex-1 md:flex-none ${mood === m ? "bg-gradient-to-r from-amber-400 to-yellow-500 text-black shadow-lg shadow-amber-500/20 scale-105" : "text-amber-200/50 hover:text-amber-300"}`}>
-                  {m === "moody" && "🌙 Regal"}
-                  {m === "happy" && "☀️ Radiance"}
-                  {m === "chill" && "🌿 Emerald"}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-end gap-2 w-full md:w-auto">
+            <button onClick={() => setIsAuthOpen(true)} className="px-3 py-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition">
+              <UserCheck className="w-3.5 h-3.5" /> VIP შესვლა
+            </button>
+            <button onClick={() => setMessages([{ id: Date.now().toString(), sender: "ai", text: "ჩატი გასუფთავებულია!", timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }])} className="p-2 bg-black/40 hover:bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/60 hover:text-amber-300 transition-all text-xs" title="ჩატის გასუფთავება">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => setShowWatchlist(!showWatchlist)} className="px-3 py-1.5 bg-gradient-to-r from-amber-950/40 to-emerald-950/40 hover:from-amber-900/60 hover:to-emerald-900/60 border border-amber-500/30 rounded-xl text-amber-200 transition-all text-xs font-semibold flex items-center gap-2 relative shadow-lg">
+              <Bookmark className="w-3.5 h-3.5 text-amber-400" /> Watchlist
+              {watchlist.length > 0 && <span className="px-1.5 py-0.2 bg-gradient-to-r from-amber-400 to-yellow-500 text-black text-[10px] font-black rounded-full shadow">{watchlist.length}</span>}
+            </button>
           </div>
         </header>
 
