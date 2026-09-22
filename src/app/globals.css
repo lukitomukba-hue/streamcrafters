@@ -2,10 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-button, a { transition: all 0.2s ease-in-out !important; }
-button:hover, a:hover { box-shadow: 0 0 12px rgba(245, 158, 11, 0.3) !important; }
-button:active, a:active { box-shadow: 0 0 18px rgba(251, 191, 36, 0.5) !important; transform: scale(0.96) !important; }
-
 .custom-scrollbar::-webkit-scrollbar { width: 5px; }
 .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(245, 158, 11, 0.3); border-radius: 10px; }
