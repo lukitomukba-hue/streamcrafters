@@ -69,7 +69,7 @@ export async function POST(req: Request) {
       ? messages.map((m: { sender: string; text: string }) => `${m.sender === "user" ? "User" : "AI"}: ${m.text}`).join("\n")
       : `User: ${lastUserMsg}`;
     const fullPrompt = `${systemPrompt}\n\nსაუბრის ისტორია:\n${formattedHistory}\n\nდააბრუნე მხოლოდ JSON:`;
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash"];
+    const models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash-exp"];
     let errorLogs: string[] = [];
     for (const key of apiKeys) {
       for (const model of models) {
