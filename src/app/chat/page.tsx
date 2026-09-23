@@ -267,7 +267,7 @@ export default function ChatPage() {
                             src={getActiveStreamUrl(msg.movie)}
                             className="w-full h-full"
                             allowFullScreen
-                            allow="autoplay; encrypted-media; picture-in-picture"
+                            allow="autoplay; encrypted-media; picture-in-picture"`n                          sandbox="allow-scripts allow-same-origin allow-forms allow-presentation"`n                          referrerPolicy="no-referrer"
                           ></iframe>
                         </div>
                       </div>
