@@ -1,8 +1,7 @@
-import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from '@google/genai';
+import { NextResponse } from 'next/server';
 
-const apiKey = process.env.GEMINI_API_KEY || "";
-const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
+const TMDB_API_KEY = process.env.TMDB_API_KEY || "ef0838a2358429fd3341fdf34a13276d";
 
 const REAL_MOVIES_DB: Record<string, any> = {
   "ჯარისკაცის მამა": {
@@ -11,85 +10,201 @@ const REAL_MOVIES_DB: Record<string, any> = {
     director: "რეზო ჩხეიძე",
     imdbRating: "8.5",
     matchScore: 99,
-    aiReasoning: "ქართული კინემატოგრაფიის უდიდესი შედევრი. სერგო ზაქარიაძის (გიორგი მახარაშვილი) გენიალური თამაში და ომის დრამა, რომელიც ოჯახურ სიყვარულს, მამობრივ თავდადებასა და გმირობას უსვამს ხაზს.",
+    aiReasoning: "ქართული კინემატოგრაფიის უდიდესი შედევრი. სერგო ზაქარიაძის გენიალური თამაში და ომის დრამა, რომელიც ოჯახურ სიყვარულს უსვამს ხაზს.",
     streamingPlatforms: ["YouTube", "Cavea Plus", "ქართული კინოარქივი"],
-    soundtrack: "რევაზ ლაღიძე - ჯარისკაცის მამა (ორიგინალური მუსიკა)",
+    soundtrack: "რევაზ ლაღიძე - ჯარისკაცის მამა",
     soundtrackUrl: "https://www.youtube.com/results?search_query=ჯარისკაცის+მამა+მუსიკა",
     bookTitle: "სულიკო ჟღენტი (ორიგინალური სცენარი)",
-    youtubeId: "4CJFF-ALAqs" // <--- სრული ფერადი ქართული ფილმის ID
+    youtubeId: "4CJFF-ALAqs",
+    fullMovieUrl: "https://www.youtube.com/embed/4CJFF-ALAqs",
+    servers: {
+      server1: "https://www.youtube.com/embed/4CJFF-ALAqs",
+      server2: "https://www.youtube.com/embed/4CJFF-ALAqs",
+      trailer: "https://www.youtube.com/embed/4CJFF-ALAqs"
+    }
   }
 };
+
+function extractMovieTitle(text: string): string {
+  return text
+    .replace(/(მინდა|ვუყურო|ვუყუროთ|ყურება|გთხოვ|მირჩიე|ფილმი|კინო|ნახვა|ჩამირთე|გვიჩვენე|მაჩვენე|რომელიმე|კარგი)/gi, "")
+    .trim();
+}
+
+async function fetchFromTMDB(rawQuery: string) {
+  if (!TMDB_API_KEY) return null;
+  
+  const cleanTitle = extractMovieTitle(rawQuery) || rawQuery;
+  const queriesToTry = [cleanTitle, rawQuery];
+
+  for (const q of queriesToTry) {
+    if (!q || q.length < 2) continue;
+    try {
+      const searchRes = await fetch(
+        `https://api.themoviedb.org/3/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(q)}&include_adult=false`
+      );
+      const searchData = await searchRes.json();
+      const movie = searchData.results?.[0];
+
+      if (movie) {
+        const videoRes = await fetch(
+          `https://api.themoviedb.org/3/movie/${movie.id}/videos?api_key=${TMDB_API_KEY}`
+        );
+        const videoData = await videoRes.json();
+        const trailer = videoData.results?.find(
+          (v: any) => v.site === "YouTube" && (v.type === "Trailer" || v.type === "Teaser")
+        ) || videoData.results?.[0];
+
+        const server1 = `https://vidsrc.me/embed/movie?tmdb=${movie.id}`;
+        const server2 = `https://vidsrc.pro/embed/movie/${movie.id}`;
+        const server3 = `https://2embed.cc/embed/movie/${movie.id}`;
+        const trailerUrl = `https://www.youtube.com/embed/${trailer?.key || 'YoHD9XEInc0'}`;
+
+        return {
+          title: movie.title || movie.original_title,
+          year: movie.release_date ? movie.release_date.split("-")[0] : "N/A",
+          director: "TMDB Cinema Index",
+          imdbRating: movie.vote_average ? movie.vote_average.toFixed(1) : "8.1",
+          matchScore: Math.round((movie.vote_average || 8.5) * 10),
+          aiReasoning: movie.overview || "მსოფლიო კინემატოგრაფიის აღიარებული სურათი.",
+          streamingPlatforms: ["Full Movie Stream", "Netflix", "Cavea Plus"],
+          soundtrack: `${movie.title} Original Soundtrack`,
+          soundtrackUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(movie.title + " soundtrack")}`,
+          bookTitle: null,
+          youtubeId: trailer?.key || "YoHD9XEInc0",
+          fullMovieUrl: server1,
+          servers: {
+            server1: server1,
+            server2: server2,
+            server3: server3,
+            trailer: trailerUrl
+          },
+          tmdbId: movie.id
+        };
+      }
+    } catch (e) {
+      console.error("TMDB Fetch Error:", e);
+    }
+  }
+  return null;
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const messages = body.messages || [];
-    const lastUserMessage = messages.filter((m: any) => m.sender === "user").pop()?.text || "";
-    const lowerText = lastUserMessage.toLowerCase();
+    const { messages, mood } = body;
 
-    if (lowerText.includes("ჯარისკაცი") || lowerText.includes("მამა") || lowerText.includes("ქართული")) {
+    const apiKey =
+      process.env.GEMINI_API_KEY ||
+      process.env.GEMINI_API_KEY_2 ||
+      process.env.GEMINI_API_KEY_3;
+
+    const lastUserMessage =
+      messages && Array.isArray(messages) && messages.length > 0
+        ? messages[messages.length - 1]?.text ?? 'გამარჯობა'
+        : 'გამარჯობა';
+
+    const lowerText = lastUserMessage.toLowerCase().trim();
+
+    if (lowerText.includes("ჯარისკაცი") || lowerText.includes("მამა") || lowerText.includes("ჯარისკაცის")) {
       return NextResponse.json({
-        reply: "რა თქმა უნდა! \"ჯარისკაცის მამა\" ქართული კინემატოგრაფიის ოქროს ფონდის შედევრია. აი დეტალური ინფორმაცია, საუნდტრეკი და სრული ფილმი:",
+        reply: "რა თქმა უნდა! ეს ქართული კინემატოგრაფიის ოქროს ფონდის შედევრია. აი დეტალური ინფორმაცია და სრული ფილმი:",
         hasMovie: true,
         movie: REAL_MOVIES_DB["ჯარისკაცის მამა"]
       });
     }
 
-    if (genAI) {
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-      const prompt = `You are StreamCrafters VIP AI Cinema Concierge. User asked: "${lastUserMessage}".
-Respond in Georgian language in a luxury VIP tone.
-Provide a real, existing movie recommendation.
-At the end of your response, strictly output JSON wrapped in \`\`\`json ... \`\`\` block:
-{
-  "title": "Real Movie Title",
-  "year": "YYYY",
-  "director": "Real Director Name",
-  "imdbRating": "X.X",
-  "matchScore": 98,
-  "aiReasoning": "Real explanation in Georgian",
-  "streamingPlatforms": ["Platform1", "Platform2"],
-  "soundtrack": "Real Track / Composer",
-  "soundtrackUrl": "https://www.youtube.com/results?search_query=...",
-  "bookTitle": "Related Book / Author or null",
-  "youtubeId": "4CJFF-ALAqs"
-}`;
-
-      const result = await model.generateContent(prompt);
-      const responseText = result.response.text();
-      const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || responseText.match(/\{[\s\S]*"title"[\s\S]*\}/);
-
-      let parsedMovie = null;
-      let replyText = responseText;
-
-      if (jsonMatch) {
-        try {
-          parsedMovie = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-          replyText = responseText.replace(/```json\n[\s\S]*?\n```/, "").trim();
-        } catch (e) {
-          console.error("JSON Parse Error", e);
-        }
-      }
-
+    if (lowerText.includes("მადლობა") || lowerText.includes("გმადლობ") || lowerText.includes("მადლობ")) {
       return NextResponse.json({
-        reply: replyText || "აი ჩემი ექსკლუზიური რეკომენდაცია:",
-        hasMovie: !!parsedMovie,
-        movie: parsedMovie || REAL_MOVIES_DB["ჯარისკაცის მამა"]
+        reply: "არაფრის, ჩემი სიამოვნებაა! 🍿✨ სასიამოვნო ყურებას გისურვებთ. თუ კიდევ რამე დაგჭირდებათ, აქ ვარ!",
+        hasMovie: false
       });
     }
 
+    if (
+      (lowerText === "გამარჯობა" || lowerText === "სალამი" || lowerText.includes("როგორ ხარ") || lowerText.includes("ვინ ხარ")) &&
+      !lowerText.includes("ვუყურო") && !lowerText.includes("ფილმი")
+    ) {
+      let chatReply = "გამარჯობა! მოგესალმებით StreamCrafters VIP Lounge-ში. რით შემიძლია დღეს გემსახუროთ?";
+      if (lowerText.includes("როგორ ხარ")) chatReply = "დიდი მადლობა, მშვენივრად ვარ! თქვენ როგორ ბრძანდებით?";
+      return NextResponse.json({ reply: chatReply, hasMovie: false });
+    }
+
+    const tmdbMovie = await fetchFromTMDB(lastUserMessage);
+    if (tmdbMovie) {
+      return NextResponse.json({
+        reply: `რა თქმა უნდა! იპოვა ფილმი "${tmdbMovie.title}". აი სრული ფილმის პლეერი და მონაცემები:`,
+        hasMovie: true,
+        movie: tmdbMovie
+      });
+    }
+
+    const conversationHistory = Array.isArray(messages)
+      ? messages.map((m: any) => `${m.sender === 'user' ? 'User' : 'AI'}: ${m.text}`).join('\n')
+      : `User: ${lastUserMessage}`;
+
+    const prompt = `
+შენ ხარ StreamCrafters-ის VIP AI კინო-ასისტენტი. საუბრობ ექსკლუზიურად ქართულად VIP ტონით.
+მომხმარებლის შეტყობინება: "${lastUserMessage}"
+
+ინსტრუქცია:
+თუ მომხმარებელი ითხოვს/ახსენებს ფილმს, შეურჩიე ცნობილი ფილმი ამ JSON ფორმატში:
+{
+  "reply": "მოკლე შესავალი ქართულად",
+  "hasMovie": true,
+  "movie": {
+    "title": "ფილმის სახელი",
+    "year": "YYYY",
+    "director": "რეჟისორი",
+    "imdbRating": "X.X",
+    "matchScore": 95,
+    "aiReasoning": "მოკლე ქართული ანალიზი",
+    "streamingPlatforms": ["Full Movie Stream"],
+    "soundtrack": "საუნდტრეკი",
+    "soundtrackUrl": "https://www.youtube.com",
+    "bookTitle": null,
+    "youtubeId": "YoHD9XEInc0",
+    "fullMovieUrl": "https://vidsrc.me/embed/movie?tmdb=27205",
+    "servers": {
+      "server1": "https://vidsrc.me/embed/movie?tmdb=27205",
+      "server2": "https://vidsrc.pro/embed/movie/27205",
+      "trailer": "https://www.youtube.com/embed/YoHD9XEInc0"
+    }
+  }
+}
+`;
+
+    if (apiKey) {
+      const ai = new GoogleGenAI({ apiKey });
+      const modelsToTry = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-2.0-flash'];
+
+      for (const modelName of modelsToTry) {
+        try {
+          const result = await ai.models.generateContent({
+            model: modelName,
+            contents: prompt,
+            config: { responseMimeType: 'application/json' },
+          });
+          const responseText = result.text ?? '';
+          if (responseText) {
+            return NextResponse.json(JSON.parse(responseText));
+          }
+        } catch (err) {
+          console.warn(`Model ${modelName} busy...`);
+        }
+      }
+    }
+
     return NextResponse.json({
-      reply: "აი რეალური ქართული შედევრი თქვენი მოთხოვნის მიხედვით:",
-      hasMovie: true,
-      movie: REAL_MOVIES_DB["ჯარისკაცის მამა"]
+      reply: "მოგესალმებით StreamCrafters VIP Lounge-ში! რით შემიძლია გემსახუროთ?",
+      hasMovie: false,
     });
 
-  } catch (error) {
-    console.error("API Error:", error);
+  } catch (error: any) {
+    console.error('Gemini API Error:', error);
     return NextResponse.json({
-      reply: "მონაცემების დამუშავებისას დაფიქსირდა ხარვეზი, თუმცა აი ჩვენი რეკომენდაცია:",
-      hasMovie: true,
-      movie: REAL_MOVIES_DB["ჯარისკაცის მამა"]
+      reply: 'მოგესალმებით StreamCrafters VIP Lounge-ში! რით შემიძლია გემსახუროთ?',
+      hasMovie: false,
     });
   }
 }
