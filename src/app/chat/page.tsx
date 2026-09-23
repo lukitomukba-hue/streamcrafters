@@ -3,14 +3,14 @@
 import { useState, useRef, useEffect } from "react";
 import {
   Sparkles, Music, Tv, Send, Mic, MicOff, Loader2, BookOpen, Play, X, Bot, User,
-  Film, Zap, Brain, Headphones, Bookmark, BookmarkCheck, Share2, Trash2, Cpu, Check, Clapperboard, SlidersHorizontal, Crown, UserCheck, ArrowLeft
+  Film, Zap, Brain, Headphones, Bookmark, BookmarkCheck, Share2, Trash2, Cpu, Check, Clapperboard, SlidersHorizontal, Crown, UserCheck, ArrowLeft, ExternalLink
 } from "lucide-react";
 import Link from "next/link";
 import AuthModal from "../components/AuthModal";
 
 interface MovieResult {
   title: string; year: string; director: string; imdbRating: string; matchScore: number;
-  aiReasoning: string; streamingPlatforms: string[]; soundtrack: string; soundtrackUrl?: string; bookTitle?: string | null;
+  aiReasoning: string; streamingPlatforms: string[]; soundtrack: string; soundtrackUrl?: string; bookTitle?: string | null; youtubeId?: string;
 }
 
 interface Message {
@@ -32,7 +32,7 @@ export default function ChatPage() {
       id: "1",
       sender: "ai",
       text: "მოგესალმებით StreamCrafters VIP Lounge-ში! 👑\n\nმე ვარ შენი პერსონალური AI კინო-კონსიერჟი. ჩემი 3-აგენტიანი არქიტექტურის წყალობით, შემიძლია შეგირჩიო ექსკლუზიური მედია-პაკეტი (ფილმი, საუნდტრეკი, წიგნი) და გაგიზიარო სიუჟეტური ანალიზი.\n\nრით ვისიამოვნოთ დღეს?",
-      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      timestamp: "10:00",
     },
   ]);
 
@@ -176,7 +176,7 @@ export default function ChatPage() {
             <button onClick={() => setIsAuthOpen(true)} className="px-3 py-1.5 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg active:scale-95 transition">
               <UserCheck className="w-3.5 h-3.5" /> VIP შესვლა
             </button>
-            <button onClick={() => setMessages([{ id: Date.now().toString(), sender: "ai", text: "ჩატი გასუფთავებულია!", timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) }])} className="p-2 bg-black/40 hover:bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/60 hover:text-amber-300 transition-all text-xs" title="ჩატის გასუფთავება">
+            <button onClick={() => setMessages([{ id: Date.now().toString(), sender: "ai", text: "ჩატი გასუფთავებულია!", timestamp: "10:00" }])} className="p-2 bg-black/40 hover:bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-200/60 hover:text-amber-300 transition-all text-xs" title="ჩატის გასუფთავება">
               <Trash2 className="w-3.5 h-3.5" />
             </button>
             <button onClick={() => setShowWatchlist(!showWatchlist)} className="px-3 py-1.5 bg-gradient-to-r from-amber-950/40 to-emerald-950/40 hover:from-amber-900/60 hover:to-emerald-900/60 border border-amber-500/30 rounded-xl text-amber-200 transition-all text-xs font-semibold flex items-center gap-2 relative shadow-lg">
@@ -200,7 +200,7 @@ export default function ChatPage() {
                   <div className="max-w-[88%] md:max-w-[78%] space-y-1.5">
                     <div className="flex items-center justify-between px-1 text-[10px] text-amber-200/40 font-medium">
                       <span className="font-semibold text-amber-400/80">{msg.sender === "user" ? "შენ" : "StreamCrafters AI"}</span>
-                      <span>{msg.timestamp}</span>
+                      <span suppressHydrationWarning>{msg.timestamp}</span>
                     </div>
 
                     <div className={`p-3.5 md:p-4 rounded-2xl text-xs md:text-sm leading-relaxed whitespace-pre-wrap transition-all duration-300 ${msg.sender === "user" ? "bg-gradient-to-r from-amber-600 via-yellow-600 to-amber-700 text-black font-medium rounded-tr-none ml-auto shadow-xl shadow-amber-900/20 border border-amber-300/30" : "bg-black/70 backdrop-blur-xl border border-amber-500/20 rounded-tl-none shadow-2xl text-amber-100/90"}`}>
@@ -230,7 +230,7 @@ export default function ChatPage() {
 
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 pt-1">
                           <button onClick={() => setSelectedTrailerMovie(msg.movie!)} className="md:col-span-2 py-2 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 hover:from-amber-400 hover:to-yellow-400 text-black font-extrabold text-xs rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg active:scale-95">
-                            <Play className="w-3.5 h-3.5 fill-black" /> თრეილერის ნახვა
+                            <Play className="w-3.5 h-3.5 fill-black" /> თრეილერის / ვიდეოს ნახვა
                           </button>
                           <button onClick={() => toggleWatchlist(msg.movie!)} className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border transition-all active:scale-95 ${isMovieInWatchlist(msg.movie.title) ? "bg-emerald-950/80 text-emerald-300 border-emerald-500/50 shadow-inner" : "bg-black/50 hover:bg-amber-500/10 text-amber-200 border-amber-500/30"}`}>
                             {isMovieInWatchlist(msg.movie.title) ? <><BookmarkCheck className="w-3.5 h-3.5 text-emerald-400" /> შენახულია</> : <><Bookmark className="w-3.5 h-3.5 text-amber-400" /> შენახვა</>}
@@ -358,14 +358,44 @@ export default function ChatPage() {
             <div className="p-4 border-b border-amber-500/20 flex items-center justify-between bg-black/60">
               <div>
                 <h3 className="font-bold text-sm md:text-base text-amber-200">{selectedTrailerMovie.title}</h3>
-                <p className="text-[11px] text-amber-200/50">Official YouTube Trailer</p>
+                <p className="text-[11px] text-amber-200/50">Official YouTube Player</p>
               </div>
-              <button onClick={() => setSelectedTrailerMovie(null)} className="p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition border border-amber-500/20">
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedTrailerMovie.youtubeId ? `https://www.youtube.com/watch?v=${selectedTrailerMovie.youtubeId}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(selectedTrailerMovie.title + " " + selectedTrailerMovie.year)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> YouTube-ზე გახსნა ↗
+                </a>
+                <button onClick={() => setSelectedTrailerMovie(null)} className="p-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition border border-amber-500/20">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
-            <div className="relative aspect-video w-full bg-black">
-              <iframe className="w-full h-full" src={`https://www.youtube.com/embed?listType=search&list=${encodeURIComponent(selectedTrailerMovie.title + " " + selectedTrailerMovie.year + " official trailer")}`} title="Trailer" allowFullScreen></iframe>
+            <div className="relative aspect-video w-full bg-black flex items-center justify-center">
+              {selectedTrailerMovie.youtubeId ? (
+                <iframe
+                  className="w-full h-full"
+                  src={`https://www.youtube-nocookie.com/embed/${selectedTrailerMovie.youtubeId}?autoplay=1`}
+                  title="Trailer"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                ></iframe>
+              ) : (
+                <div className="text-center p-6 space-y-3">
+                  <p className="text-amber-200/80 text-sm">YouTube ზღუდავს ამ ვიდეოს ჩაშენებას. უყურეთ პირდაპირ YouTube-ზე:</p>
+                  <a
+                    href={`https://www.youtube.com/results?search_query=${encodeURIComponent(selectedTrailerMovie.title + " " + selectedTrailerMovie.year)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold text-xs rounded-xl transition shadow-xl"
+                  >
+                    ▶ უყურე YouTube-ზე
+                  </a>
+                </div>
+              )}
             </div>
           </div>
         </div>

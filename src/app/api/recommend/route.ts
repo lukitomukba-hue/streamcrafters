@@ -4,7 +4,6 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const apiKey = process.env.GEMINI_API_KEY || "";
 const genAI = apiKey ? new GoogleGenerativeAI(apiKey) : null;
 
-// რეალური ფილმების ბაზა (ტესტირებისთვის და ოფლაინ რეჟიმისთვის)
 const REAL_MOVIES_DB: Record<string, any> = {
   "ჯარისკაცის მამა": {
     title: "ჯარისკაცის მამა (Father of a Soldier)",
@@ -16,7 +15,8 @@ const REAL_MOVIES_DB: Record<string, any> = {
     streamingPlatforms: ["YouTube", "Cavea Plus", "ქართული კინოარქივი"],
     soundtrack: "რევაზ ლაღიძე - ჯარისკაცის მამა (ორიგინალური მუსიკა)",
     soundtrackUrl: "https://www.youtube.com/results?search_query=ჯარისკაცის+მამა+მუსიკა",
-    bookTitle: "სულიკო ჟღენტი (ორიგინალური სცენარი)"
+    bookTitle: "სულიკო ჟღენტი (ორიგინალური სცენარი)",
+    youtubeId: "4CJFF-ALAqs" // <--- სრული ფერადი ქართული ფილმის ID
   }
 };
 
@@ -27,16 +27,14 @@ export async function POST(req: Request) {
     const lastUserMessage = messages.filter((m: any) => m.sender === "user").pop()?.text || "";
     const lowerText = lastUserMessage.toLowerCase();
 
-    // 1. თუ მომხმარებელი ითხოვს "ჯარისკაცის მამას" ან ქართულ კლასიკას
     if (lowerText.includes("ჯარისკაცი") || lowerText.includes("მამა") || lowerText.includes("ქართული")) {
       return NextResponse.json({
-        reply: `რა თქმა უნდა! "ჯარისკაცის მამა" ქართული კინემატოგრაფიის ოქროს ფონდის შედევრია. აი დეტალური ინფორმაცია, საუნდტრეკი და თრეილერი:`,
+        reply: "რა თქმა უნდა! \"ჯარისკაცის მამა\" ქართული კინემატოგრაფიის ოქროს ფონდის შედევრია. აი დეტალური ინფორმაცია, საუნდტრეკი და სრული ფილმი:",
         hasMovie: true,
         movie: REAL_MOVIES_DB["ჯარისკაცის მამა"]
       });
     }
 
-    // 2. თუ Gemini API Key არსებობს, რეალურ დროში დააგენერიროს ნამდვილი ფილმი
     if (genAI) {
       const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
       const prompt = `You are StreamCrafters VIP AI Cinema Concierge. User asked: "${lastUserMessage}".
@@ -53,7 +51,8 @@ At the end of your response, strictly output JSON wrapped in \`\`\`json ... \`\`
   "streamingPlatforms": ["Platform1", "Platform2"],
   "soundtrack": "Real Track / Composer",
   "soundtrackUrl": "https://www.youtube.com/results?search_query=...",
-  "bookTitle": "Related Book / Author or null"
+  "bookTitle": "Related Book / Author or null",
+  "youtubeId": "4CJFF-ALAqs"
 }`;
 
       const result = await model.generateContent(prompt);
@@ -79,9 +78,8 @@ At the end of your response, strictly output JSON wrapped in \`\`\`json ... \`\`
       });
     }
 
-    // Default Fallback
     return NextResponse.json({
-      reply: `აი რეალური ქართული შედევრი თქვენი მოთხოვნის მიხედვით:`,
+      reply: "აი რეალური ქართული შედევრი თქვენი მოთხოვნის მიხედვით:",
       hasMovie: true,
       movie: REAL_MOVIES_DB["ჯარისკაცის მამა"]
     });
